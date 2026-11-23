@@ -429,7 +429,7 @@ def er_api_fx():
     return {'USD': round(1 / r['USD'], 4), 'JPY': round(1 / r['JPY'], 5), 'date': TODAY.isoformat(), 'src': '國際匯率'}
 
 
-# ---------------- 日股（個人版）：只抓 Firestore「meta/jpwatch」列出、有人持有的日股 ----------------
+# ---------------- 日股：只抓 Firestore「jpwatch」裡有人持有的日股 ----------------
 JP_RE = re.compile(r'^\d{3}[0-9A-Z]\.T$')
 JST = datetime.timezone(datetime.timedelta(hours=9))
 
@@ -442,9 +442,19 @@ def jp_watch():
         cfg = f.read()
     pid = re.search(r'projectId:\s*"([^"]+)"', cfg).group(1)
     key = re.search(r'apiKey:\s*"([^"]+)"', cfg).group(1)
-    d = get_json(f'https://firestore.googleapis.com/v1/projects/{pid}/databases/(default)/documents/meta/jpwatch?key={key}', tries=2)
-    vals = (((d.get('fields') or {}).get('codes') or {}).get('arrayValue') or {}).get('values') or []
-    return sorted({v.get('stringValue', '').upper() for v in vals if JP_RE.match(v.get('stringValue', '').upper())})
+    codes, token = set(), ''
+    for _ in range(50):  # 彙整每位使用者 jpwatch/{uid} 的日股代號（只有代號）
+        url = f'https://firestore.googleapis.com/v1/projects/{pid}/databases/(default)/documents/jpwatch?pageSize=300&key={key}'
+        d = get_json(url + (f'&pageToken={token}' if token else ''), tries=2)
+        for doc in d.get('documents') or []:
+            for v in (((doc.get('fields') or {}).get('codes') or {}).get('arrayValue') or {}).get('values') or []:
+                c = v.get('stringValue', '').upper()
+                if JP_RE.match(c):
+                    codes.add(c)
+        token = d.get('nextPageToken')
+        if not token:
+            break
+    return sorted(codes)
 
 
 def jp_name(code):
@@ -486,7 +496,7 @@ def fetch_jp(old_prices):
     try:
         codes = jp_watch()
     except Exception as e:  # noqa: BLE001
-        say(f'日股清單讀取失敗（Firestore 規則還沒開放 meta/jpwatch？）：{e}')
+        say(f'日股清單讀取失敗（Firestore 規則還沒開放 jpwatch？）：{e}')
         return {}
     if not codes:
         say('日股：沒有人持有，略過')
