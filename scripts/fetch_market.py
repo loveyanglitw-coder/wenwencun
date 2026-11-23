@@ -395,7 +395,10 @@ def bot_fx():
     req = urllib.request.Request('https://rate.bot.com.tw/xrt/flcsv/0/day', headers={**UA, 'Accept': 'text/csv,*/*'})
     with urllib.request.urlopen(req, timeout=40) as r:
         raw = r.read()
-    text = raw.decode('utf-8-sig', 'replace')
+    try:
+        text = raw.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        text = raw.decode('big5', 'replace')
     out = {}
     for line in text.splitlines():
         cols = [c.strip() for c in line.split(',')]
@@ -410,9 +413,20 @@ def bot_fx():
         if buy and sell:
             out[cols[0]] = round((buy + sell) / 2, 4)
     if 'USD' not in out or 'JPY' not in out:
-        raise RuntimeError('台灣銀行匯率格式不符')
+        say('  台灣銀行回傳開頭：' + text[:160].replace('\n', ' | '))
+        return er_api_fx()
     out['date'] = TODAY.isoformat()
+    out['src'] = '台銀即期'
     return out
+
+
+def er_api_fx():
+    """備援：open.er-api.com（免費、免金鑰的每日匯率）"""
+    j = get_json('https://open.er-api.com/v6/latest/TWD')
+    r = j.get('rates') or {}
+    if not r.get('USD') or not r.get('JPY'):
+        raise RuntimeError('備援匯率也抓不到')
+    return {'USD': round(1 / r['USD'], 4), 'JPY': round(1 / r['JPY'], 5), 'date': TODAY.isoformat(), 'src': '國際匯率'}
 
 
 def main():

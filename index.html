@@ -469,7 +469,7 @@ function curChip() {
 }
 function fxNote() {
   const c = curCode(); if (c === 'TWD') return '';
-  return `<div class="small" style="text-align:center;margin:0 0 6px">以${CURS[c].name}顯示・1 ${c === 'USD' ? '美元' : '日圓'} ＝ ${MARKET.fx[c]} 台幣・台銀即期 ${esc((MARKET.fx.date || '').slice(5).replace('-', '/'))}</div>`;
+  return `<div class="small" style="text-align:center;margin:0 0 6px">以${CURS[c].name}顯示・1 ${c === 'USD' ? '美元' : '日圓'} ＝ ${MARKET.fx[c]} 台幣・${esc(MARKET.fx.src || '台銀即期')} ${esc((MARKET.fx.date || '').slice(5).replace('-', '/'))}</div>`;
 }
 function rememberedEmail() { try { return localStorage.getItem('wwc-email') || ''; } catch (e) { return ''; } }
 function loginError(e) {
