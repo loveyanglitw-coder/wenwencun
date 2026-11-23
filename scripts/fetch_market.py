@@ -20,7 +20,8 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 OUT = os.path.join(ROOT, 'data', 'market.json')
 UA = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
       'Accept': 'application/json, text/plain, */*'}
-CODE_RE = re.compile(r'^[0-9A-Z]{4,6}$')
+# 只收股票與 ETF：4 碼個股、00 開頭的 ETF（含 00400A、00679B 這類），排除 6 碼的權證等
+CODE_RE = re.compile(r'^(?:\d{4}[A-Z]?|00\d{2,4}[A-Z]?)$')
 log = []
 
 
