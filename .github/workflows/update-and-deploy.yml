@@ -15,6 +15,10 @@ on:
         description: '掃描全部 ETF 的配息與發放日（約 3～5 分鐘）'
         type: boolean
         default: false
+      jp_codes:
+        description: '（測試用）指定要抓的日股代號，例如 7203.T,8306.T；空白＝讀個人版持有清單'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -41,6 +45,7 @@ jobs:
         run: python scripts/fetch_market.py
         env:
           FULL_SCAN: ${{ github.event.inputs.full_scan }}
+          JP_CODES: ${{ github.event.inputs.jp_codes }}
       - id: save
         name: 存回專案
         run: |

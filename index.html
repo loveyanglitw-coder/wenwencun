@@ -172,6 +172,7 @@ nav.tabs .plus{justify-self:center;width:52px;height:52px;border-radius:18px;bac
 .lr{display:flex;justify-content:space-between;gap:8px;font-size:13px}.lr>span:first-child{color:var(--muted)}
 .lr b{font:500 14px var(--f-num)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.jp-tag{display:inline-block;min-width:0;height:auto;line-height:1.5;font-weight:600;background:#fde8e8;color:#c0392b;margin-left:6px;font-size:11px;padding:1px 6px;border-radius:999px;vertical-align:middle;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -302,9 +303,26 @@ const acc = () => S.accounts.find(a => a.id === S.cur) || S.accounts[0];
 const stockName = c => { const n = S.stocks[c] && S.stocks[c].name; return (n && n !== c ? n : TW_NAMES[c]) || n || ''; };
 const sortTx = list => list.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
 
+// ---- 日股（個人版）：代號以 .T 結尾；交易、股利以日圓記錄，每筆帶入帳匯率 fx（1 日圓＝幾台幣），計算時換成台幣 ----
+const JP_ON = window.APP_EDITION === 'personal';
+const isJP = c => /\.T$/i.test(c || '');
+const JP_TAX = 0.20315;
+function jpyRate() { return (MARKET && MARKET.fx && MARKET.fx.JPY) || 0.2; }
+function twTx(t) {
+  if (!isJP(t.code) || t.type === 'stock') return t;
+  const r = t.fx || jpyRate(), o = Object.assign({}, t);
+  if (o.price != null) o.price = t.price * r;
+  for (const k of ['fee', 'tax', 'amount', 'gross', 'other', 'interest', 'wtax']) if (o[k] != null) o[k] = Math.round(t[k] * r);
+  return o;
+}
+const yen = (n, plus) => { if (S.settings.hide) return '＊＊＊＊'; const v = Math.round(n || 0); return (v < 0 ? '−' : plus && v > 0 ? '+' : '') + '¥' + grp(Math.abs(v)); };
+const jpPx = n => '¥' + grp(n, n % 1 ? 1 : 0);
+const jpTag = c => isJP(c) ? '<span class="tag jp-tag">日股</span>' : '';
+function txAmt(t, n, opt) { return isJP(t.code) && t.type !== 'stock' ? `${yen(n, opt && opt.plus)}<span class="small" style="font-weight:400"> ≈${money(n * (t.fx || jpyRate()), opt)}</span>` : money(n, opt); }
 function feeFor(a, amount) { return amount > 0 ? Math.max(a.min, Math.floor(amount * 0.001425 * a.disc)) : 0; }
 function taxRate(code, date) {
   code = (code || '').toUpperCase();
+  if (isJP(code)) return 0;
   if (/^00\d+[A-Z]*B$/.test(code)) return (date || todayISO()) <= '2026-12-31' ? 0 : 0.001;
   if (/^00/.test(code)) return 0.001;
   return 0.003;
@@ -329,11 +347,12 @@ function payDateOf(t) {
 const origOf = t => t.gross != null ? t.gross : t.amount + (t.other || 0); // 原始股利＝未扣匯費等費用的配發現金
 const divPaid = t => t.type === 'cash' && t.amount > 0 && payDateOf(t) <= todayISO();
 /* ================= calculations ================= */
-function compute(a) {
+function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯示日股的日圓數字）
+  const TX = raw ? a.txns : a.txns.map(twTx);
   const pos = {}, realized = {}, divs = {};
   let inSum = 0, outSum = 0, loanSum = 0, buySum = 0, sellNet = 0, cashSum = 0, origSum = 0, otherSum = 0, firstIn = null;
   const P = c => pos[c] || (pos[c] = { code: c, shares: 0, cost: 0, buyQty: 0, buyAmt: 0, divOnPos: 0, divRecv: 0, divPool: 0, first: null });
-  for (const t of sortTx(a.txns)) {
+  for (const t of sortTx(TX)) {
     const p = t.code ? P(t.code) : null;
     if (t.type === 'in') { inSum += t.amount; if (!firstIn) firstIn = t.date; }
     else if (t.type === 'out') outSum += t.amount;
@@ -355,21 +374,22 @@ function compute(a) {
       p.shares += t.shares;
       const d = divs[t.code] || (divs[t.code] = { code: t.code, cash: 0, int: 0, sh: 0, n: 0 }); d.sh += t.shares;
     } else if (t.type === 'cash') {
-      cashSum += t.amount; origSum += origOf(t); otherSum += t.other || 0; loanSum += t.interest || 0; if (p) { p.divOnPos += t.amount - (t.interest || 0); if (t.date <= todayISO()) p.divRecv += t.amount; if (p.shares > 0) p.divPool += t.amount; else if (realized[t.code]) realized[t.code].div += t.amount; }
-      const d = divs[t.code] || (divs[t.code] = { code: t.code, cash: 0, int: 0, sh: 0, n: 0 }); d.cash += t.amount; d.orig = (d.orig || 0) + origOf(t); d.oth = (d.oth || 0) + (t.other || 0); d.int += t.interest || 0; d.n++;
+      cashSum += t.amount; origSum += origOf(t); otherSum += (t.other || 0) + (t.wtax || 0); loanSum += t.interest || 0; if (p) { p.divOnPos += t.amount - (t.interest || 0); if (t.date <= todayISO()) p.divRecv += t.amount; if (p.shares > 0) p.divPool += t.amount; else if (realized[t.code]) realized[t.code].div += t.amount; }
+      const d = divs[t.code] || (divs[t.code] = { code: t.code, cash: 0, int: 0, sh: 0, n: 0 }); d.cash += t.amount; d.orig = (d.orig || 0) + origOf(t); d.oth = (d.oth || 0) + (t.other || 0) + (t.wtax || 0); d.int += t.interest || 0; d.n++;
     }
   }
   const today = todayISO();
   const holds = Object.values(pos).filter(p => p.shares > 0).map(p => {
-    const st = S.stocks[p.code] || {};
-    const price = st.price != null ? st.price : (p.buyQty ? p.buyAmt / p.buyQty : 0);
+    const st = S.stocks[p.code] || {}, k = isJP(p.code) && !raw ? jpyRate() : 1;
+    const price = st.price != null ? st.price * k : (p.buyQty ? p.buyAmt / p.buyQty : 0);
     const mv = p.shares * price, pl = mv - p.cost, ret = p.cost ? pl / p.cost : 0;
-    return Object.assign(p, { name: st.name || p.code, freq: st.freq || '', price, chg: st.chg || 0, mv, pl, ret,
+    return Object.assign(p, { name: st.name || p.code, freq: st.freq || '', price, chg: (st.chg || 0) * k, mv, pl, ret,
       ann: annualize(ret, daysBetween(p.first || today, today)),
       plD: pl + p.divRecv, retD: p.cost ? (pl + p.divRecv) / p.cost : 0, annD: annualize(p.cost ? (pl + p.divRecv) / p.cost : 0, daysBetween(p.first || today, today)),
       avgBuy: p.buyQty ? p.buyAmt / p.buyQty : 0, avgCost: p.shares ? (p.cost - p.divOnPos) / p.shares : 0,
-      today: (st.chg || 0) * p.shares });
+      today: (st.chg || 0) * k * p.shares });
   }).sort((x, y) => y.mv - x.mv);
+  if (!raw && holds.some(h => isJP(h.code))) { const R = compute(a, true); holds.forEach(h => { if (isJP(h.code)) h.y = R.holds.find(x => x.code === h.code); }); }
   const mv = holds.reduce((s, h) => s + h.mv, 0), cost = holds.reduce((s, h) => s + h.cost, 0);
   const unreal = mv - cost, divHeld = holds.reduce((s, h) => s + h.divRecv, 0);
   const realList = Object.values(realized);
@@ -377,7 +397,7 @@ function compute(a) {
   const todayPL = holds.reduce((s, h) => s + h.today, 0);
   const invest = inSum - outSum;
   const balance = inSum - outSum - buySum + sellNet + cashSum - loanSum;
-  const sellCost = holds.reduce((s, h) => s + feeFor(a, h.mv) + Math.floor(h.mv * taxRate(h.code)), 0);
+  const sellCost = holds.reduce((s, h) => s + (isJP(h.code) ? 0 : feeFor(a, h.mv) + Math.floor(h.mv * taxRate(h.code))), 0);
   const stockPL = unreal + real, netDiv = cashSum - loanSum, total = stockPL + netDiv;
   const days = firstIn ? daysBetween(firstIn, today) : 0;
   // dividends expected this / next month from announced events
@@ -392,13 +412,13 @@ function compute(a) {
   // last 12 months / this year
   const y0 = today.slice(0, 4); const cut = new Date(today); cut.setFullYear(cut.getFullYear() - 1); const cutISO = cut.toISOString().slice(0, 10);
   let div12 = 0, divYear = 0, loanYear = 0, monthsWithDiv = new Set();
-  for (const t of a.txns) {
+  for (const t of TX) {
     if (t.type === 'cash') { if (t.date > cutISO) div12 += t.amount; if (t.date.slice(0, 4) === y0) { divYear += t.amount; loanYear += t.interest || 0; monthsWithDiv.add(t.date.slice(5, 7)); } }
     if (t.type === 'loan' && t.date.slice(0, 4) === y0) loanYear += t.amount;
   }
   const monthsElapsed = +today.slice(5, 7);
   return { holds, mv, cost, unreal, divHeld, unrealRet: cost ? unreal / cost : 0, real, realDiv, realCost, realRet: realCost ? real / realCost : 0, realList, divs: Object.values(divs),
-    cashSum, origSum, otherSum, loanSum, netDiv, divCount: a.txns.filter(divPaid).length, inSum, outSum, invest, balance,
+    cashSum, origSum, otherSum, wtaxSum: TX.reduce((s, t) => s + (t.type === 'cash' ? t.wtax || 0 : 0), 0), loanSum, netDiv, divCount: a.txns.filter(divPaid).length, inSum, outSum, invest, balance,
     value: balance + mv, netValue: balance + mv - sellCost, stockPL, total,
     stockRet: invest ? stockPL / invest : 0, totalRet: invest ? total / invest : 0, days,
     totalAnn: invest ? annualize(total / invest, days) : 0, stockAnn: invest ? annualize(stockPL / invest, days) : 0,
@@ -416,7 +436,7 @@ function persist() {
     writing = writing.then(async () => {
       try {
         if (store && store.kind === 'db') { await store.ref.set(snap); syncWatch(); }
-        else if (store && store.kind === 'fb') await store.ref.set({ state: snap, updatedAt: Date.now() });
+        else if (store && store.kind === 'fb') { await store.ref.set({ state: snap, updatedAt: Date.now() }); syncJpWatch(); }
         else localStorage.setItem('wwc-state', JSON.stringify(snap));
       } catch (e) { toast(e && e.code === 'quota_exceeded' ? '儲存空間滿了，請先匯出備份' : '儲存失敗，請檢查網路後再試'); }
     });
@@ -459,7 +479,7 @@ async function initFirebase(cfg) {
     unsub = ref.onSnapshot(snap => {
       if (snap.exists && snap.data().state) { S = normalize(snap.data().state); mode = 'saved'; }
       else if (mode !== 'saved' || !snap.exists) { S = emptyState(); S.accounts[0].name = (user.displayName || '我的帳戶').slice(0, 20); mode = 'saved'; persist(); }
-      applyMarket(); autoPost(); render();
+      applyMarket(); autoPost(); render(); syncJpWatch();
     }, e => { toast('讀取雲端資料失敗：' + (e.code || e.message)); });
   });
 }
@@ -549,6 +569,17 @@ function syncWatch() {
   if (key === wlSent) return;
   wlSent = key;
   store.wl.set({ codes, at: Date.now() }).catch(() => { wlSent = null; });
+}
+// 個人版：把持有中的日股代號（只有代號）寫到 meta/jpwatch，每日排程照這份清單抓日股股價
+let jpSent = null;
+function syncJpWatch() {
+  if (!JP_ON || !store || store.kind !== 'fb' || mode === 'demo') return;
+  const set = new Set();
+  for (const a of S.accounts) for (const h of compute(a).holds) if (isJP(h.code)) set.add(h.code);
+  const codes = [...set].sort(), key = codes.join(',');
+  if (key === jpSent) return;
+  jpSent = key;
+  store.ref.firestore.collection('meta').doc('jpwatch').set({ codes, at: Date.now() }).catch(() => { jpSent = null; });
 }
 function applyMarket() {
   if (!MARKET) return;
@@ -823,12 +854,12 @@ function holdList(holds, m) {
   return `<div class="hold-list">${holds.map(h => { const pl = dm ? h.plD : h.pl, ret = dm ? h.retD : h.ret, ann = dm ? h.annD : h.ann; return `
     <button class="hold-card rowbtn ${pl > 0 ? 'up' : pl < 0 ? 'down' : ''}" data-a="stock" data-v="${esc(h.code)}">
       <span class="hold-head">
-        <span class="hold-title"><span class="hold-code num">${esc(h.code)}</span><span class="hold-name">${esc(h.name)}</span></span>
-        <span class="hold-price"><span class="s">現價</span><b class="num ${cls(h.chg)}">${grp(h.price, 2)}</b><span class="num ${cls(h.chg)}">${h.chg ? arrow(h.chg) + (h.chg > 0 ? '+' : '−') + grp(Math.abs(h.chg), 2) + '（' + pct(h.chg / (h.price - h.chg)) + '）' : '—'}</span></span>
+        <span class="hold-title"><span class="hold-code num">${esc(h.code)}</span><span class="hold-name">${esc(h.name)}</span>${jpTag(h.code)}</span>
+        ${h.y ? `<span class="hold-price"><span class="s">現價</span><b class="num ${cls(h.y.chg)}">${jpPx(h.y.price)}</b><span class="num ${cls(h.y.chg)}">${h.y.chg ? arrow(h.y.chg) + (h.y.chg > 0 ? '+' : '−') + grp(Math.abs(h.y.chg), 1) + '（' + pct(h.y.chg / (h.y.price - h.y.chg)) + '）' : '—'}</span></span>` : `<span class="hold-price"><span class="s">現價</span><b class="num ${cls(h.chg)}">${grp(h.price, 2)}</b><span class="num ${cls(h.chg)}">${h.chg ? arrow(h.chg) + (h.chg > 0 ? '+' : '−') + grp(Math.abs(h.chg), 2) + '（' + pct(h.chg / (h.price - h.chg)) + '）' : '—'}</span></span>`}
       </span>
       <span class="hold-body">
-        <span class="kv"><span class="k">庫存（佔 ${grp(m.mv ? h.mv / m.mv * 100 : 0, 1)}%）</span><span class="num" style="font-weight:600">${grp(h.shares)} 股</span><span class="s num">市值 ${money(h.mv)}</span></span>
-        <span class="kv" style="align-items:center;text-align:center"><span class="k">${dm ? '損益（含配息）' : '損益試算'}</span><span class="num ${cls(pl)}" style="font-weight:700;font-size:16px">${money(pl, { plus: true })}</span><span class="s num">${dm ? '已領配息 ' + money(h.divRecv) : esc(h.freq || '未設定配息頻率')}</span></span>
+        <span class="kv"><span class="k">庫存（佔 ${grp(m.mv ? h.mv / m.mv * 100 : 0, 1)}%）</span><span class="num" style="font-weight:600">${grp(h.shares)} 股</span><span class="s num">${h.y ? '市值 ' + yen(h.y.mv) + '<br>≈ ' + money(h.mv) : '市值 ' + money(h.mv)}</span></span>
+        <span class="kv" style="align-items:center;text-align:center"><span class="k">${dm ? '損益（含配息）' : '損益試算'}</span><span class="num ${cls(pl)}" style="font-weight:700;font-size:16px">${money(pl, { plus: true })}</span><span class="s num">${h.y && !dm ? '日圓 ' + yen(h.y.pl, true) + '（含匯差）' : dm ? '已領配息 ' + money(h.divRecv) : esc(h.freq || '未設定配息頻率')}</span></span>
         <span class="kv" style="align-items:flex-end;text-align:right"><span class="k">報酬率</span><span class="num ${cls(pl)}" style="font-weight:700;font-size:16px">${arrow(pl)}${pct(ret)}</span><span class="s num">年化 ${pct(ann, 1)}</span></span>
       </span>
     </button>`; }).join('')}</div>`;
@@ -839,13 +870,13 @@ function divRecords(list, showCode) {
   if (!list.length) return `<div class="list"><div class="empty">還沒有股利紀錄</div></div>`;
   return `<div class="list">${list.map(t => t.type === 'stock' ? `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><div class="main"><span class="t">${showCode ? `<b class="num">${esc(t.code)}</b> ` + esc(stockName(t.code)) + '・' : ''}股票股利</span><span class="st num">${roc(t.date)}${t.auto ? '・自動入帳' : ''}</span></div><b class="num">+${grp(t.shares)} 股</b>${delBtn(t.id)}</div>` : `
     <div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆" style="align-items:flex-start"><div class="main" style="gap:4px">
-      <span class="t">${showCode ? `<b class="num">${esc(t.code)}</b> ` + esc(stockName(t.code)) : '現金股利'}</span>
+      <span class="t">${showCode ? `<b class="num">${esc(t.code)}</b> ` + esc(stockName(t.code)) : '現金股利'}${jpTag(t.code)}</span>
       <span class="st num">${roc(t.date)}${t.shares ? '・' + grp(t.shares) + ' 股' : ''}${t.perShare ? ' × ' + t.perShare : ''}${t.auto ? '・自動入帳' : ''}${t.memo ? '・' + esc(t.memo) : ''}</span>
       <span style="display:grid;grid-template-columns:1.2fr 1.1fr .7fr .7fr;gap:6px;margin-top:4px">
-        <span class="kv"><span class="k">最後股利金額</span><b class="num gold" style="font-size:16px">${money(t.amount - (t.interest || 0))}</b></span>
-        <span class="kv"><span class="k">原始股利金額</span><span class="num" style="font-weight:500">${money(origOf(t))}</span></span>
-        <span class="kv"><span class="k">匯費</span><span class="num" style="font-weight:500">${money(-(t.other || 0))}</span></span>
-        <span class="kv"><span class="k">利息</span><span class="num" style="font-weight:500">${money(-(t.interest || 0))}</span></span>
+        <span class="kv"><span class="k">最後股利金額</span><b class="num gold" style="font-size:16px">${txAmt(t, t.amount - (t.interest || 0))}</b></span>
+        <span class="kv"><span class="k">原始股利金額</span><span class="num" style="font-weight:500">${isJP(t.code) ? yen(origOf(t)) : money(origOf(t))}</span></span>
+        <span class="kv"><span class="k">${isJP(t.code) ? '日本扣稅' : '匯費'}</span><span class="num" style="font-weight:500">${isJP(t.code) ? yen(-(t.wtax || 0)) : money(-(t.other || 0))}</span></span>
+        <span class="kv"><span class="k">${isJP(t.code) ? '其他費用' : '利息'}</span><span class="num" style="font-weight:500">${isJP(t.code) ? yen(-(t.other || 0) - (t.interest || 0)) : money(-(t.interest || 0))}</span></span>
       </span></div>${delBtn(t.id)}</div>`).join('')}</div>`;
 }
 function pageLedger(a, m) {
@@ -867,8 +898,8 @@ function pageLedger(a, m) {
       (m.realList.length ? `<div class="hold-list">${m.realList.slice().sort((x, y) => (y.last || '').localeCompare(x.last || '')).map(r => { const v = rv(r); return `
     <button class="hold-card rowbtn ${v > 0 ? 'up' : v < 0 ? 'down' : ''}" data-a="stock" data-v="${esc(r.code)}">
       <span class="hold-head">
-        <span class="hold-title"><span class="hold-code num">${esc(r.code)}</span><span class="hold-name">${esc(stockName(r.code))}</span></span>
-        <span class="hold-price"><span class="s">賣出日</span><b class="num" style="font-size:14px">${roc(r.last)}</b><span class="s num">現賣均 ${grp(r.sellAmt / r.qty, 2)}／成本均 ${grp(r.cost / r.qty, 2)}</span></span>
+        <span class="hold-title"><span class="hold-code num">${esc(r.code)}</span><span class="hold-name">${esc(stockName(r.code))}</span>${jpTag(r.code)}</span>
+        <span class="hold-price"><span class="s">賣出日</span><b class="num" style="font-size:14px">${roc(r.last)}</b><span class="s num">${isJP(r.code) ? '台幣計' : ''}現賣均 ${grp(r.sellAmt / r.qty, 2)}／成本均 ${grp(r.cost / r.qty, 2)}</span></span>
       </span>
       <span class="hold-body">
         <span class="kv"><span class="k">成交股數</span><span class="num" style="font-weight:600">${grp(r.qty)} 股</span><span class="s num">成本 ${money(r.cost)}</span></span>
@@ -877,10 +908,10 @@ function pageLedger(a, m) {
       </span>
     </button>`; }).join('')}</div>` : `<div class="list"><div class="empty">還沒有賣出紀錄</div></div>`);
   } else {
-    sum = L('原始股利', money(m.origSum)) + L('匯費', money(-m.otherSum), '', 'center') + L('利息', money(-m.loanSum), '', 'center') + L('最後股利', money(m.netDiv), 'gold', 'right');
+    sum = L('原始股利', money(m.origSum)) + L(m.wtaxSum ? '匯費・日本稅' : '匯費', money(-m.otherSum), '', 'center') + L('利息', money(-m.loanSum), '', 'center') + L('最後股利', money(m.netDiv), 'gold', 'right');
     const pend = pendingDivs(a);
     body = pendingCard(a) +
-      (m.divs.length ? `<div class="list"><div class="tbl h" style="grid-template-columns:1.3fr 1fr .8fr .55fr 1fr"><span>股票（次數）</span><span class="right">原始股利</span><span class="right">匯費</span><span class="right">利息</span><span class="right">最後股利</span></div>${m.divs.sort((x, y) => y.cash - x.cash).map(d => `<button class="tbl rowbtn" data-a="stock" data-v="${esc(d.code)}" style="grid-template-columns:1.3fr 1fr .8fr .55fr 1fr"><span style="display:flex;flex-direction:column;min-width:0"><b style="font-weight:600">${esc(d.code)}</b><span class="small" style="font-family:var(--f-body)">${esc(stockName(d.code))}（${d.n} 次${d.sh ? '・配股 ' + grp(d.sh) + ' 股' : ''}）</span></span><span class="right">${money(d.orig || d.cash)}</span><span class="right">${money(-(d.oth || 0))}</span><span class="right">${money(-d.int)}</span><span class="right gold" style="font-weight:600">${money(d.cash - d.int)}</span></button>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有股利紀錄</div></div>`) +
+      (m.divs.length ? `<div class="list"><div class="tbl h" style="grid-template-columns:1.3fr 1fr .8fr .55fr 1fr"><span>股票（次數）</span><span class="right">原始股利</span><span class="right">匯費</span><span class="right">利息</span><span class="right">最後股利</span></div>${m.divs.sort((x, y) => y.cash - x.cash).map(d => `<button class="tbl rowbtn" data-a="stock" data-v="${esc(d.code)}" style="grid-template-columns:1.3fr 1fr .8fr .55fr 1fr"><span style="display:flex;flex-direction:column;min-width:0"><b style="font-weight:600">${esc(d.code)}${jpTag(d.code)}</b><span class="small" style="font-family:var(--f-body)">${esc(stockName(d.code))}（${d.n} 次${d.sh ? '・配股 ' + grp(d.sh) + ' 股' : ''}）</span></span><span class="right">${money(d.orig || d.cash)}</span><span class="right">${money(-(d.oth || 0))}</span><span class="right">${money(-d.int)}</span><span class="right gold" style="font-weight:600">${money(d.cash - d.int)}</span></button>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有股利紀錄</div></div>`) +
       `<div class="h2row"><h2 style="font-size:15px">每筆股利</h2><span class="small">最後股利 = 原始股利 − 匯費等費用 − 利息・點一筆可修改</span></div>` + divRecords(sortTx(a.txns.filter(t => t.type === 'cash' || t.type === 'stock')).reverse(), true) +
       (() => { const ln = sortTx(a.txns.filter(t => t.type === 'loan')).reverse(); return `<div class="h2row"><h2 style="font-size:15px">單獨記錄的利息</h2><span class="small">沒有股利的月份，從累計股息扣除</span></div>` + (ln.length ? `<div class="list">${ln.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><span class="tag" style="background:var(--gold-soft);color:var(--gold)">利息</span><div class="main"><span class="t">${esc(t.memo || '利息')}</span><span class="st num">${roc(t.date)}</span></div><b class="num">−${money(t.amount)}</b>${delBtn(t.id)}</div>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有利息紀錄</div></div>`); })() +
       '';
@@ -900,25 +931,26 @@ function pageStock(a, m) {
   const h = m.holds.find(x => x.code === code);
   const txs = sortTx(a.txns.filter(t => t.code === code && (t.type === 'buy' || t.type === 'sell'))).reverse();
   const cashTx = sortTx(a.txns.filter(t => t.code === code && t.type === 'cash'));
-  const cum = cashTx.reduce((s, t) => s + t.amount - (t.interest || 0), 0);
+  const cum = cashTx.reduce((s, t) => s + t.amount - (t.interest || 0), 0), jp = isJP(code);
+  const yq = jp ? 'https://finance.yahoo.co.jp/quote/' + encodeURIComponent(code) : 'https://tw.stock.yahoo.com/quote/' + encodeURIComponent(code);
   const last = cashTx[cashTx.length - 1];
   const per = last ? last.perShare : 0;
   const perYear = per * ({ 月配: 12, 雙月配: 6, 季配: 4, 半年配: 2, 年配: 1 }[st.freq] || 1);
   const needSh = per ? Math.ceil(V.budget / (perYear / 12)) : 0;
   const tname = { buy: '買進', sell: '賣出', cash: '現金股利', stock: '股票股利' };
   const evs = (st.events || []).slice().sort((x, y) => x.ex < y.ex ? 1 : -1);
-  return `<div class="top">${backBtn()}<div style="flex:1;min-width:0"><div style="display:flex;gap:8px;align-items:baseline"><b class="num" style="font-size:18px">${esc(code)}</b><span style="font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(st.name || '')}</span></div></div></div>
+  return `<div class="top">${backBtn()}<div style="flex:1;min-width:0"><div style="display:flex;gap:8px;align-items:baseline"><b class="num" style="font-size:18px">${esc(code)}</b><span style="font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(st.name || '')}</span>${jpTag(code)}</div></div></div>
   <div class="card pad" style="display:flex;flex-direction:column;gap:10px">
-    <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap"><span class="num ${cls(st.chg)}" style="font-weight:700;font-size:38px;line-height:1">${st.price != null ? grp(st.price, 2) : '—'}</span><span class="num ${cls(st.chg)}">${st.chg ? arrow(st.chg) + (st.chg > 0 ? '+' : '−') + grp(Math.abs(st.chg), 2) : ''}</span></div>
+    <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap"><span class="num ${cls(st.chg)}" style="font-weight:700;font-size:38px;line-height:1">${st.price != null ? (jp ? jpPx(st.price) : grp(st.price, 2)) : '—'}</span>${jp && st.price != null ? `<span class="small num">≈ ${money(st.price * jpyRate(), { show: true, twd: true })}</span>` : ''}<span class="num ${cls(st.chg)}">${st.chg ? arrow(st.chg) + (st.chg > 0 ? '+' : '−') + grp(Math.abs(st.chg), 2) : ''}</span></div>
     <div class="grid2">
-      <div class="field"><label for="s-price">現價（手動更新）</label><input id="s-price" class="num" type="number" step="0.01" inputmode="decimal" value="${st.price ?? ''}" data-f="price"></div>
+      <div class="field"><label for="s-price">現價${jp ? '（日圓，' : '（'}手動更新）</label><input id="s-price" class="num" type="number" step="0.01" inputmode="decimal" value="${st.price ?? ''}" data-f="price"></div>
       <div class="field"><label for="s-freq">配息頻率</label><select id="s-freq" data-f="freq">${['', '月配', '雙月配', '季配', '半年配', '年配'].map(f => `<option value="${f}" ${f === (st.freq || '') ? 'selected' : ''}>${f || '未設定'}</option>`).join('')}</select></div>
     </div>
-    <div class="small">${st.pdate ? '股價日期 ' + roc(st.pdate) + '・' : ''}<a href="https://tw.stock.yahoo.com/quote/${encodeURIComponent(code)}" target="_blank" rel="noopener">在 Yahoo 股市查價 ↗</a></div>
+    <div class="small">${st.pdate ? '股價日期 ' + roc(st.pdate) + '・' : ''}<a href="${yq}" target="_blank" rel="noopener">在 Yahoo ${jp ? 'ファイナンス' : '股市'}查價 ↗</a></div>
   </div>
   ${h ? `<div class="card pad grid2">
-    ${kv('庫存股數', sharesTxt(h.shares))}${kv('持有成本', money(h.cost))}
-    ${kv('成交均／成本均', grp(h.avgBuy, 2) + ' / ' + grp(h.avgCost, 2), '', '成本均已扣除這段持有領到的股息')}
+    ${kv('庫存股數', jp ? grp(h.shares) + ' 股' : sharesTxt(h.shares))}${kv('持有成本', h.y ? yen(h.y.cost) + '<span class="small"> ≈ ' + money(h.cost) + '</span>' : money(h.cost))}
+    ${h.y ? kv('成交均／成本均（日圓）', grp(h.y.avgBuy, 1) + ' / ' + grp(h.y.avgCost, 1), '', '成本均已扣除這段持有領到的股息') : kv('成交均／成本均', grp(h.avgBuy, 2) + ' / ' + grp(h.avgCost, 2), '', '成本均已扣除這段持有領到的股息')}
     ${kv('損益試算', arrow(h.pl) + money(h.pl, { plus: true }), cls(h.pl))}
     ${kv('報酬率／年化', pct(h.ret) + ' / ' + pct(h.ann, 1), cls(h.pl))}
     ${kv('報酬率（含息）', pct(h.cost ? (h.pl + h.divOnPos) / h.cost : 0), cls(h.pl + h.divOnPos))}
@@ -926,14 +958,14 @@ function pageStock(a, m) {
   <div class="h2row"><h2>股息記錄</h2><span class="small">每股現金（線）・除息股數（柱）</span></div>
   <div class="card pad" style="display:flex;flex-direction:column;gap:12px">
     ${divChart(cashTx.slice(-8))}
-    <div class="tiles"><div class="tile" style="background:var(--gold-soft)"><span class="small">累計最後股利</span><span class="v gold">${money(cum)}</span></div><div class="tile" style="background:var(--bg)"><span class="small">領息次數</span><span class="v">${cashTx.filter(divPaid).length} 次</span></div></div>
+    <div class="tiles"><div class="tile" style="background:var(--gold-soft)"><span class="small">累計最後股利</span><span class="v gold">${jp ? yen(cum) : money(cum)}</span></div><div class="tile" style="background:var(--bg)"><span class="small">領息次數</span><span class="v">${cashTx.filter(divPaid).length} 次</span></div></div>
   </div>
-  <div class="card pad" style="border:1.5px solid var(--accent);display:flex;flex-direction:column;gap:10px">
+  ${jp ? '' : `<div class="card pad" style="border:1.5px solid var(--accent);display:flex;flex-direction:column;gap:10px">
     <b>投資預算計算</b>
     <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px">想每月從這檔領
       <span class="field" style="padding:6px 10px;flex-direction:row;align-items:center;gap:4px"><span class="muted">$</span><input class="num" style="width:90px;text-align:right;font-weight:600" type="number" inputmode="numeric" value="${V.budget}" data-f="budget" aria-label="想每月領的金額"></span></label>
     ${per ? `<div class="grid2" style="background:var(--bg);border-radius:12px;padding:10px 12px">${kv('需持有', grp(Math.ceil(needSh / 1000)) + ' 張', '', h ? (h.shares >= needSh ? '已有 ' + grp(Math.floor(h.shares / 1000)) + ' 張 ✓' : '還差 ' + grp(Math.ceil((needSh - h.shares) / 1000)) + ' 張') : '')}${kv('以現價需投入', money(needSh * (st.price || 0), { show: true }), '', `依最近每股 ${per} 元、${st.freq || '年配'}估算`)}</div>` : `<div class="small">有配息紀錄、並設定配息頻率後就能計算。</div>`}
-  </div>
+  </div>`}
   <div class="h2row"><h2>除權息公告</h2><span class="small">發放日自動入帳</span></div>
   <div class="list">
     ${evs.length ? evs.map(e => { const c = divCalc(a, code, e); return `<div class="row"><div class="main"><span class="t num">除息 ${roc(e.ex)}・發放 ${e.pay ? roc(e.pay) : '未定'}</span><span class="st">${e.cash ? '每股 ' + e.cash + ' 元' : ''}${e.stock ? '・配股 ' + e.stock + ' 元' : ''}・最後購買日 ${md(prevWeekday(e.ex))}${e.auto ? '・自動取得' : ''}</span></div><div class="r"><b class="num gold">${c.sh ? money(c.net) : '—'}</b><span class="small num">${c.sh ? grp(c.sh) + ' 股' : '未持有'}</span></div>${delBtn('ev:' + e.id)}</div>`; }).join('') : `<div class="empty">還沒有公告。上線自動資料後會自己出現，現在可先手動新增。</div>`}
@@ -946,7 +978,7 @@ function pageStock(a, m) {
   <div class="h2row"><h2>每筆股利</h2><span class="small">最後 = 原始 − 匯費 − 利息・點一筆可修改</span></div>
   ${divRecords(sortTx(a.txns.filter(t => t.code === code && (t.type === 'cash' || t.type === 'stock'))).reverse(), false)}
   <div class="h2row"><h2>交易紀錄</h2><span class="small">點一筆可修改</span></div>
-  <div class="list">${txs.length ? txs.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><div class="main"><span class="t">${tname[t.type] || t.type}${t.type === 'buy' || t.type === 'sell' ? ' ' + grp(t.shares) + ' 股 @ ' + grp(t.price, 2) : t.type === 'cash' ? ' ' + grp(t.shares) + ' 股 × ' + t.perShare : t.type === 'stock' ? ' ' + grp(t.shares) + ' 股' : ''}${t.auto ? ' <span class="small">（自動）</span>' : ''}</span><span class="st num">${roc(t.date)}${t.fee ? '・手續費 ' + money(t.fee, { show: true }) : ''}${t.tax ? '・證交稅 ' + money(t.tax, { show: true }) : ''}${t.nhi ? '・補充保費 ' + money(t.nhi, { show: true }) : ''}</span></div><b class="num ${t.type === 'cash' ? 'gold' : ''}">${t.type === 'buy' ? '−' + money(t.shares * t.price + (t.fee || 0)) : t.type === 'sell' ? '+' + money(t.shares * t.price - (t.fee || 0) - (t.tax || 0)) : t.type === 'cash' ? '+' + money(t.amount) : '+' + grp(t.shares) + ' 股'}</b>${delBtn(t.id)}</div>`).join('') : '<div class="empty">沒有紀錄</div>'}</div>
+  <div class="list">${txs.length ? txs.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><div class="main"><span class="t">${tname[t.type] || t.type}${t.type === 'buy' || t.type === 'sell' ? ' ' + grp(t.shares) + ' 股 @ ' + grp(t.price, 2) : t.type === 'cash' ? ' ' + grp(t.shares) + ' 股 × ' + t.perShare : t.type === 'stock' ? ' ' + grp(t.shares) + ' 股' : ''}${t.auto ? ' <span class="small">（自動）</span>' : ''}</span><span class="st num">${roc(t.date)}${t.fx ? '・匯率 ' + t.fx : ''}${t.fee ? '・手續費 ' + (isJP(t.code) ? yen(t.fee) : money(t.fee, { show: true })) : ''}${t.tax ? '・證交稅 ' + money(t.tax, { show: true }) : ''}${t.nhi ? '・補充保費 ' + money(t.nhi, { show: true }) : ''}</span></div><b class="num ${t.type === 'cash' ? 'gold' : ''}">${t.type === 'buy' ? '−' + txAmt(t, t.shares * t.price + (t.fee || 0)) : t.type === 'sell' ? '+' + txAmt(t, t.shares * t.price - (t.fee || 0) - (t.tax || 0)) : t.type === 'cash' ? '+' + txAmt(t, t.amount) : '+' + grp(t.shares) + ' 股'}</b>${delBtn(t.id)}</div>`).join('') : '<div class="empty">沒有紀錄</div>'}</div>
   <div style="display:flex;gap:10px"><a class="btn" href="https://tw.stock.yahoo.com/quote/${encodeURIComponent(code)}" target="_blank" rel="noopener">看線圖</a><button class="btn primary" style="flex:1" data-a="add" data-v="buy" data-code="${esc(code)}">記一筆 ${esc(code)}</button></div>`;
 }
 function divChart(list) {
@@ -975,10 +1007,10 @@ function monthly(a) {
   const yrs = {};
   const Y = y => yrs[y] || (yrs[y] = { div: Array(12).fill(0), loan: Array(12).fill(0), inv: Array(12).fill(0), fee: Array(12).fill(0), gain: Array(12).fill(0), count: 0, costEnd: Array(12).fill(null) });
   const pos = {}; let cost = 0;
-  for (const t of sortTx(a.txns)) {
+  for (const t of sortTx(a.txns.map(twTx))) {
     const y = t.date.slice(0, 4), mi = +t.date.slice(5, 7) - 1, o = Y(y);
     const p = t.code ? (pos[t.code] || (pos[t.code] = { sh: 0, cost: 0 })) : null;
-    if (t.type === 'cash') { o.div[mi] += origOf(t); o.loan[mi] += (t.interest || 0) + (t.other || 0); o.count++; }
+    if (t.type === 'cash') { o.div[mi] += origOf(t); o.loan[mi] += (t.interest || 0) + (t.other || 0) + (t.wtax || 0); o.count++; }
     if (t.type === 'loan') o.loan[mi] += t.amount;
     if (t.type === 'buy') { const c = t.shares * t.price + (t.fee || 0); o.inv[mi] += c; o.fee[mi] += t.fee || 0; p.sh += t.shares; p.cost += c; cost += c; }
     if (t.type === 'sell') { const sh = Math.min(t.shares, p.sh), avg = p.sh ? p.cost / p.sh : 0; o.fee[mi] += (t.fee || 0) + (t.tax || 0); o.gain[mi] += sh * t.price - (t.fee || 0) - (t.tax || 0) - avg * sh; p.cost -= avg * sh; p.sh -= sh; cost -= avg * sh; }
@@ -1182,17 +1214,18 @@ function contextType() {
 function openSheet(type, code) {
   const a = acc(), m = compute(a);
   V.sheet = { type: type || contextType(), accId: a.id, code: code || (m.holds[0] && m.holds[0].code) || '', date: todayISO(), unit: 'lot', feeTouched: false, taxTouched: false, rate: null, f: {}, filledFor: null, cashTouched: false, sshTouched: false, otherTouched: false };
+  V.sheet.wasJP = isJP(V.sheet.code);
   render();
 }
 function openEdit(id) {
   const a = acc(), t = a.txns.find(x => x.id === id); if (!t) return;
-  const sh = { type: t.type, accId: a.id, code: t.code || '', date: t.date, unit: 'lot', feeTouched: false, taxTouched: false, rate: null, f: { memo: t.memo || '' }, filledFor: null, cashTouched: false, sshTouched: false, otherTouched: false, editId: id, editAcc: a.id, keepEv: t.ev };
+  const sh = { type: t.type, accId: a.id, code: t.code || '', date: t.date, unit: 'lot', feeTouched: false, taxTouched: false, rate: null, f: { memo: t.memo || '' }, filledFor: null, cashTouched: false, sshTouched: false, otherTouched: false, editId: id, editAcc: a.id, keepEv: t.ev, wasJP: isJP(t.code) };
   if (t.type === 'buy' || t.type === 'sell') {
-    sh.unit = t.shares % 1000 === 0 ? 'lot' : 'sh'; sh.f.qty = String(sh.unit === 'lot' ? t.shares / 1000 : t.shares); sh.f.price = String(t.price);
+    sh.unit = t.shares % 1000 === 0 && !isJP(t.code) ? 'lot' : 'sh'; if (t.fx) sh.f.fx = String(t.fx); sh.f.qty = String(sh.unit === 'lot' ? t.shares / 1000 : t.shares); sh.f.price = String(t.price);
     sh.feeTouched = true; sh.f.fee = String(t.fee || 0); if (t.type === 'sell') { sh.taxTouched = true; sh.f.tax = String(t.tax || 0); }
   } else if (t.type === 'cash' || t.type === 'stock') {
     sh.type = 'div'; sh.filledFor = t.code; if (t.shares) sh.f.held = String(t.shares);
-    if (t.type === 'cash') { sh.f.per = t.perShare != null ? String(t.perShare) : ''; sh.f.perStock = ''; sh.cashTouched = true; sh.f.cash = String(origOf(t)); sh.otherTouched = true; sh.f.other = String(t.other || 0); sh.f.interest = t.interest ? String(t.interest) : ''; }
+    if (t.type === 'cash') { sh.f.per = t.perShare != null ? String(t.perShare) : ''; sh.f.perStock = ''; sh.cashTouched = true; sh.f.cash = String(origOf(t)); sh.otherTouched = true; sh.f.other = String(t.other || 0); sh.f.interest = t.interest ? String(t.interest) : ''; if (isJP(t.code)) { sh.wtaxTouched = true; sh.f.wtax = String(t.wtax || 0); if (t.fx) sh.f.fx = String(t.fx); } }
     else { delete sh.f.held; sh.f.per = ''; sh.f.perStock = t.perShare != null ? String(t.perShare) : ''; sh.sshTouched = true; sh.f.stockSh = String(t.shares); sh.cashTouched = true; sh.f.cash = ''; }
   } else sh.f.amount = String(t.amount);
   V.sheet = sh; render();
@@ -1214,10 +1247,12 @@ function divForm(a, sh) { // live dividend math from 庫存 × 每股股利; eve
   const per = num(f.per), perStock = num(f.perStock);
   const cash = sh.cashTouched ? num(f.cash) : Math.round(held * per);
   const stockSh = sh.sshTouched ? Math.round(num(f.stockSh)) : Math.floor(held * perStock / 10);
-  const autoOther = cash > 0 ? (S.settings.nhiOn && cash >= 20000 ? Math.round(cash * 0.0211) : 0) + S.settings.remit : 0;
+  const jp = isJP(sh.code);
+  const autoOther = cash > 0 && !jp ? (S.settings.nhiOn && cash >= 20000 ? Math.round(cash * 0.0211) : 0) + S.settings.remit : 0;
   const other = sh.otherTouched ? num(f.other) : autoOther;
-  const interest = num(f.interest), orig = cash;
-  return { curHeld, held, per, perStock, cash, stockSh, other, interest, orig, fin: cash - other - interest };
+  const wtax = jp ? (sh.wtaxTouched ? num(f.wtax) : Math.floor(cash * JP_TAX)) : 0;
+  const interest = jp ? 0 : num(f.interest), orig = cash;
+  return { curHeld, held, per, perStock, cash, stockSh, other, wtax, interest, orig, fin: cash - other - interest - wtax, jp };
 }
 function renderSheet(only) { FORCE_TWD = true; try { return renderSheetInner(only); } finally { FORCE_TWD = false; } }
 function renderSheetInner(only) {
@@ -1232,27 +1267,28 @@ function renderSheetInner(only) {
   const memoF = ph => field('x-memo', '備註', inp('x-memo', 'memo', f.memo, `placeholder="${ph || ''}"`));
   let body = '';
   if (t === 'buy' || t === 'sell') {
+    const jp = isJP(sh.code), fx = f.fx != null && f.fx !== '' ? num(f.fx) : jpyRate();
     const qty = num(f.qty), price = f.price != null && f.price !== '' ? num(f.price) : (S.stocks[sh.code] && S.stocks[sh.code].price) || 0;
-    const shares = sh.unit === 'lot' ? qty * 1000 : qty, amt = shares * price;
+    const shares = sh.unit === 'lot' && !jp ? qty * 1000 : qty, amt = shares * price;
     const rate = sh.rate != null ? sh.rate : +(0.1425 * a.disc).toFixed(4);
-    const fee = sh.feeTouched ? num(f.fee) : (amt > 0 ? Math.max(a.min, Math.floor(amt * rate / 100)) : 0);
+    const fee = sh.feeTouched ? num(f.fee) : (amt > 0 && !jp ? Math.max(a.min, Math.floor(amt * rate / 100)) : 0);
     const tax = t === 'sell' ? (sh.taxTouched ? num(f.tax) : Math.floor(amt * taxRate(sh.code, sh.date))) : 0;
     const held = (m.holds.find(h => h.code === sh.code) || {}).shares || 0;
     const net = t === 'buy' ? -(amt + fee) : amt - fee - tax;
     body = stockPicker + `
       <div class="grid2">
         ${dateF('成交日期')}
-        <div class="field focus"><span class="k" style="display:flex;justify-content:space-between">成交數量<span><button class="btn small ghost" style="height:22px;padding:0 6px;${sh.unit === 'lot' ? 'color:var(--accent);font-weight:700' : ''}" data-a="unit" data-v="lot">張</button><button class="btn small ghost" style="height:22px;padding:0 6px;${sh.unit === 'sh' ? 'color:var(--accent);font-weight:700' : ''}" data-a="unit" data-v="sh">股</button></span></span><input class="bignum" type="text" inputmode="decimal" value="${esc(f.qty ?? '')}" data-s="qty" aria-label="成交數量" placeholder="0"></div>
+        <div class="field focus"><span class="k" style="display:flex;justify-content:space-between">成交數量${jp ? '<span>股</span>' : `<span><button class="btn small ghost" style="height:22px;padding:0 6px;${sh.unit === 'lot' ? 'color:var(--accent);font-weight:700' : ''}" data-a="unit" data-v="lot">張</button><button class="btn small ghost" style="height:22px;padding:0 6px;${sh.unit === 'sh' ? 'color:var(--accent);font-weight:700' : ''}" data-a="unit" data-v="sh">股</button></span>`}</span><input class="bignum" type="text" inputmode="decimal" value="${esc(f.qty ?? '')}" data-s="qty" aria-label="成交數量" placeholder="0"></div>
       </div>
       ${t === 'sell' ? `<button class="btn small" data-a="allHeld" style="align-self:flex-start;color:var(--accent)" ${held ? '' : 'disabled'}>庫存選擇：${grp(held)} 股・全部帶入</button>` : ''}
       <div class="grid2">
-        ${field('x-price', '成交價格', inp('x-price', 'price', f.price ?? (S.stocks[sh.code] && S.stocks[sh.code].price), 'class="bignum" type="text" step="0.01" inputmode="decimal"'))}
-        <div class="field"><label for="x-fee">手續費（可自行修改）</label><div style="display:flex;gap:6px;align-items:center"><input id="x-fee" class="num" type="text" value="${fee}" data-s="fee" style="flex:1"><span style="display:flex;align-items:center;gap:2px;border-left:1px solid var(--line);padding-left:6px"><input id="x-rate" class="num" type="text" inputmode="decimal" value="${rate}" data-s="rate" aria-label="手續費率" style="width:62px;text-align:right"><span class="unit">%</span></span></div></div>
-        ${t === 'sell' ? field('x-tax', `證交稅（${grp(taxRate(sh.code, sh.date) * 100, 1)}%）`, inp('x-tax', 'tax', tax, 'class="num" type="text"')) : ''}
-        <div class="field" data-live="net" style="background:var(--sunk);border-color:var(--sunk)"><span class="k">淨收付</span><b class="num ${net < 0 ? '' : 'up'}" style="font-size:22px">${net < 0 ? '−' : '+'}$${grp(Math.abs(net))}</b></div>
+        ${field('x-price', jp ? '成交價格（日圓）' : '成交價格', inp('x-price', 'price', f.price ?? (S.stocks[sh.code] && S.stocks[sh.code].price), 'class="bignum" type="text" step="0.01" inputmode="decimal"'))}
+        ${jp ? field('x-fee', '手續費（日圓，依券商填）', inp('x-fee', 'fee', fee, 'class="num" type="text" inputmode="decimal"')) + field('x-fx', '入帳匯率（1 日圓＝台幣）', inp('x-fx', 'fx', f.fx ?? jpyRate(), 'class="num" type="text" inputmode="decimal"')) : `<div class="field"><label for="x-fee">手續費（可自行修改）</label><div style="display:flex;gap:6px;align-items:center"><input id="x-fee" class="num" type="text" value="${fee}" data-s="fee" style="flex:1"><span style="display:flex;align-items:center;gap:2px;border-left:1px solid var(--line);padding-left:6px"><input id="x-rate" class="num" type="text" inputmode="decimal" value="${rate}" data-s="rate" aria-label="手續費率" style="width:62px;text-align:right"><span class="unit">%</span></span></div></div>`}
+        ${t === 'sell' && !jp ? field('x-tax', `證交稅（${grp(taxRate(sh.code, sh.date) * 100, 1)}%）`, inp('x-tax', 'tax', tax, 'class="num" type="text"')) : ''}
+        <div class="field" data-live="net" style="background:var(--sunk);border-color:var(--sunk)"><span class="k">淨收付</span><b class="num ${net < 0 ? '' : 'up'}" style="font-size:22px">${net < 0 ? '−' : '+'}${jp ? '¥' : '$'}${grp(Math.abs(Math.round(net)))}</b>${jp ? `<span class="small num">≈ ${net < 0 ? '−' : '+'}$${grp(Math.abs(Math.round(net * fx)))}</span>` : ''}</div>
       </div>
       ${memoF()}
-      <p class="small" data-live="hint" style="margin:0">${grp(shares)} 股・手續費率預設 0.1425% × ${a.disc} 折${t === 'sell' ? '・目前持有 ' + grp(held) + ' 股' : ''}</p>`;
+      <p class="small" data-live="hint" style="margin:0">${grp(shares)} 股・${jp ? '日股 100 股一單位；價格、手續費用日圓填，存檔時依入帳匯率換成台幣計入帳戶；日本沒有證交稅' : '手續費率預設 0.1425% × ' + a.disc + ' 折'}${t === 'sell' ? '・目前持有 ' + grp(held) + ' 股' : ''}</p>`;
   } else if (t === 'div') {
     if (sh.code && sh.filledFor !== sh.code && f.per == null && f.perStock == null) divPrefill(a, sh);
     const d = divForm(a, sh);
@@ -1262,21 +1298,26 @@ function renderSheetInner(only) {
       ${dateF('除權息日期')}
       <div class="grid2">
         ${field('x-held', `除權息前庫存（股）<span data-live="tag-held" style="color:var(--accent);font-size:11px">${f.held != null && f.held !== '' ? '' : '　自動帶入'}</span>`, inp('x-held', 'held', f.held ?? d.curHeld, 'class="num" type="text" inputmode="numeric"'))}
-        ${field('x-per', '每股現金股利（元）', inp('x-per', 'per', f.per, 'class="num" type="text" step="0.0001" inputmode="decimal" placeholder="0"'))}
+        ${field('x-per', d.jp ? '每股現金股利（日圓）' : '每股現金股利（元）', inp('x-per', 'per', f.per, 'class="num" type="text" step="0.0001" inputmode="decimal" placeholder="0"'))}
         ${field('x-pst', '每股股票股利（元）', inp('x-pst', 'perStock', f.perStock, 'class="num" type="text" step="0.0001" inputmode="decimal" placeholder="0"'))}
-        ${field('x-int', '利息（手動填入）', inp('x-int', 'interest', f.interest, 'class="num" type="text" inputmode="numeric" placeholder="0"'))}
+        ${d.jp ? field('x-fx', '入帳匯率（1 日圓＝台幣）', inp('x-fx', 'fx', f.fx ?? jpyRate(), 'class="num" type="text" inputmode="decimal"')) : field('x-int', '利息（手動填入）', inp('x-int', 'interest', f.interest, 'class="num" type="text" inputmode="numeric" placeholder="0"'))}
         ${field('x-cash', '配發現金' + autoTag(sh.cashTouched, 'cash'), inp('x-cash', 'cash', d.cash || '', 'class="bignum" type="text" inputmode="numeric" placeholder="0"'), 'focus')}
         ${field('x-ssh', '配發股數' + autoTag(sh.sshTouched, 'ssh'), inp('x-ssh', 'stockSh', d.stockSh || '', 'class="bignum" type="text" inputmode="numeric" placeholder="0"'))}
-        ${field('x-other', '其他費用（匯費、補充保費）' + autoTag(sh.otherTouched, 'other'), inp('x-other', 'other', d.other || '', 'class="num" type="text" inputmode="numeric" placeholder="0"'))}
+        ${field('x-other', (d.jp ? '其他費用（券商手續費等，日圓）' : '其他費用（匯費、補充保費）') + autoTag(sh.otherTouched, 'other'), inp('x-other', 'other', d.other || '', 'class="num" type="text" inputmode="numeric" placeholder="0"'))}
+        ${d.jp ? field('x-wtax', `日本扣稅（${grp(JP_TAX * 100, 3)}%）` + autoTag(sh.wtaxTouched, 'wtax'), inp('x-wtax', 'wtax', d.wtax || '', 'class="num" type="text" inputmode="numeric" placeholder="0"')) : ''}
       </div>
       <p class="small" style="margin:0">庫存依除權息日前一天的持股自動帶入。配發現金 = 庫存 × 每股現金股利；配發股數 = 庫存 × 每股股票股利 ÷ 10。標「自動計算」的欄位也可以直接改成實際金額。</p>
       <div class="card" data-live="sum" style="background:var(--gold-soft);padding:12px 14px;display:flex;flex-direction:column;gap:6px">
-        <div class="lr"><span>原始股利金額</span><b class="num">${money(d.orig, { show: true })}</b></div>
+        ${d.jp ? `<div class="lr"><span>原始股利金額</span><b class="num">¥${grp(d.orig)}</b></div>
+        <div class="lr"><span>日本扣稅</span><b class="num">−¥${grp(d.wtax)}</b></div>
+        <div class="lr"><span>其他費用</span><b class="num">−¥${grp(d.other)}</b></div>
+        <div class="lr" style="border-top:1px solid var(--line);padding-top:6px"><span style="color:var(--ink);font-weight:700">最後股利金額</span><b class="num gold" style="font-size:22px;font-weight:700">¥${grp(d.fin)}</b></div>
+        <div class="lr"><span>換算台幣（入帳匯率 ${esc(f.fx ?? jpyRate())}）</span><b class="num">≈ $${grp(Math.round(d.fin * (num(f.fx) || jpyRate())))}</b></div>` : `<div class="lr"><span>原始股利金額</span><b class="num">${money(d.orig, { show: true })}</b></div>
         <div class="lr"><span>匯費等其他費用</span><b class="num">${money(-d.other, { show: true })}</b></div>
         <div class="lr"><span>利息</span><b class="num">${money(-d.interest, { show: true })}</b></div>
-        <div class="lr" style="border-top:1px solid var(--line);padding-top:6px"><span style="color:var(--ink);font-weight:700">最後股利金額</span><b class="num gold" style="font-size:22px;font-weight:700">${money(d.fin, { show: true })}</b></div>
+        <div class="lr" style="border-top:1px solid var(--line);padding-top:6px"><span style="color:var(--ink);font-weight:700">最後股利金額</span><b class="num gold" style="font-size:22px;font-weight:700">${money(d.fin, { show: true })}</b></div>`}
         ${d.stockSh ? `<div class="lr"><span>配發股數</span><b class="num">+${grp(d.stockSh)} 股</b></div>` : ''}
-        <span class="small">原始股利金額 = 配發現金（未扣匯費）；最後股利金額 = 原始股利 − 其他費用 − 利息</span>
+        <span class="small">${d.jp ? '日股：原始股利 = 配發現金（日圓）；最後股利 = 原始 − 日本扣稅 − 其他費用，存檔時依入帳匯率換成台幣' : '原始股利金額 = 配發現金（未扣匯費）；最後股利金額 = 原始股利 − 其他費用 − 利息'}</span>
       </div>
       ${memoF('例：115 年 11 月配息')}
       <button class="btn ghost" data-a="divQuery" style="color:var(--ex);font-size:17px">查詢／試算股利</button>
@@ -1317,24 +1358,25 @@ function saveSheet() {
   let txs = [];
   const base = { date: sh.date || todayISO(), memo: (f.memo || '').trim() || undefined };
   if (t === 'buy' || t === 'sell') {
-    const qty = num(f.qty), shares = Math.round(sh.unit === 'lot' ? qty * 1000 : qty);
+    const jp = isJP(code), qty = num(f.qty), shares = Math.round(sh.unit === 'lot' && !jp ? qty * 1000 : qty);
     const price = f.price != null && f.price !== '' ? num(f.price) : (S.stocks[code] && S.stocks[code].price) || 0;
     if (!(shares > 0)) return toast('請填成交數量');
     if (!(price > 0)) return toast('請填成交價格');
     const amt = shares * price, rate = sh.rate != null ? sh.rate : 0.1425 * a0.disc;
-    const tx = Object.assign({ id: uid(), type: t, code, shares, price, fee: sh.feeTouched ? num(f.fee) : Math.max(a0.min, Math.floor(amt * rate / 100)) }, base);
+    const tx = Object.assign({ id: uid(), type: t, code, shares, price, fee: sh.feeTouched ? num(f.fee) : jp ? 0 : Math.max(a0.min, Math.floor(amt * rate / 100)) }, base);
+    if (jp) tx.fx = num(f.fx) || jpyRate();
     if (t === 'sell') {
       let held = (m.holds.find(h => h.code === code) || {}).shares || 0;
       if (sh.editId) { const o = (S.accounts.find(x => x.id === sh.editAcc) || a0).txns.find(x => x.id === sh.editId); if (o && o.type === 'sell' && o.code === code && sh.editAcc === a0.id) held += o.shares; }
       if (mode !== 'demo' && shares > held) return toast(`只持有 ${grp(held)} 股，不能賣 ${grp(shares)} 股`);
-      tx.tax = sh.taxTouched ? num(f.tax) : Math.floor(amt * taxRate(code, tx.date));
+      tx.tax = jp ? 0 : sh.taxTouched ? num(f.tax) : Math.floor(amt * taxRate(code, tx.date));
     }
     txs.push(tx);
   } else if (t === 'div') {
     const d = divForm(a0, sh);
     if (!(d.cash > 0) && !(d.stockSh > 0)) return toast('請填每股股利，或直接填配發現金／配發股數');
     const ev = sh.ev && sh.filledFor === code ? sh.ev : null;
-    if (d.cash > 0) txs.push(Object.assign({ id: uid(), type: 'cash', code, shares: d.held, perShare: d.per || undefined, gross: d.cash, other: d.other, amount: d.cash - d.other, interest: d.interest, ev: ev ? ev.id : undefined }, base));
+    if (d.cash > 0) txs.push(Object.assign({ id: uid(), type: 'cash', code, shares: d.held, perShare: d.per || undefined, gross: d.cash, other: d.other, amount: d.cash - d.other - d.wtax, interest: d.interest, wtax: d.jp ? d.wtax : undefined, fx: d.jp ? (num(f.fx) || jpyRate()) : undefined, ev: ev ? ev.id : undefined }, base));
     if (d.stockSh > 0) txs.push(Object.assign({ id: uid(), type: 'stock', code, shares: d.stockSh, perShare: d.perStock || undefined, ev: ev ? ev.id : undefined }, base));
   } else {
     const amount = num(f.amount); if (!(amount > 0)) return toast('請填金額');
@@ -1498,14 +1540,14 @@ document.addEventListener('input', e => {
     else if (k === 'acc') { sh.accId = el.value; renderSheet(); return; }
     else if (k === 'rate') { sh.rate = num(el.value); sh.feeTouched = false; refreshSheetTotals(); return; }
     else if (k === 'date') { sh.date = el.value; if (sh.type === 'div') refreshSheetTotals(); }
-    else { sh.f[k] = el.value; if (k === 'fee') sh.feeTouched = true; if (k === 'tax') sh.taxTouched = true; if (k === 'cash') sh.cashTouched = el.value !== ''; if (k === 'stockSh') sh.sshTouched = el.value !== ''; if (k === 'other') sh.otherTouched = el.value !== ''; }
-    if (['qty', 'price', 'fee', 'tax', 'per', 'perStock', 'held', 'shares', 'cash', 'stockSh', 'other', 'interest'].includes(k)) { refreshSheetTotals(el); }
+    else { sh.f[k] = el.value; if (k === 'fee') sh.feeTouched = true; if (k === 'tax') sh.taxTouched = true; if (k === 'cash') sh.cashTouched = el.value !== ''; if (k === 'stockSh') sh.sshTouched = el.value !== ''; if (k === 'other') sh.otherTouched = el.value !== ''; if (k === 'wtax') sh.wtaxTouched = el.value !== ''; }
+    if (['qty', 'price', 'fee', 'tax', 'per', 'perStock', 'held', 'shares', 'cash', 'stockSh', 'other', 'interest', 'wtax', 'fx'].includes(k)) { refreshSheetTotals(el); }
   }
 });
 document.addEventListener('change', e => {
   if (painting) return;
   const el = e.target;
-  if (el.dataset.s === 'code' && V.sheet) { const sh = V.sheet; for (const k of ['cash', 'other', 'stockSh', 'held', 'per', 'perStock']) delete sh.f[k]; sh.cashTouched = sh.sshTouched = sh.otherTouched = false; sh.ev = null; sh.filledFor = null; refreshSheetTotals(); return; }
+  if (el.dataset.s === 'code' && V.sheet) { const sh = V.sheet; for (const k of ['cash', 'other', 'stockSh', 'held', 'per', 'perStock', 'wtax']) delete sh.f[k]; sh.cashTouched = sh.sshTouched = sh.otherTouched = sh.wtaxTouched = false; sh.ev = null; sh.filledFor = null; if (sheetLayoutChanged()) renderSheet(); else refreshSheetTotals(); return; }
   if (el.dataset.s) return;
   if (el.id === 'importFile') return;
   const f = el.dataset.f; if (!f) return;
@@ -1547,7 +1589,10 @@ function suggestCodes(q) {
     out.push([r, bonus, c.length, c, n]);
   }
   out.sort((x, y) => x[0] - y[0] || x[1] - y[1] || x[2] - y[2] || (x[3] < y[3] ? -1 : 1));
-  return out.slice(0, 5).map(x => ({ code: x[3], name: x[4], held: held.has(x[3]) }));
+  const res = out.filter(x => JP_ON || !isJP(x[3])).slice(0, 5).map(x => ({ code: x[3], name: x[4], held: held.has(x[3]) }));
+  const jq = JP_ON && /^\d{3}[0-9A-Z](\.T?)?$/.test(Q) ? Q.replace(/\.T?$/, '') + '.T' : null; // 個人版：輸入 4 碼時多一個日股選項
+  if (jq && !res.some(x => x.code === jq)) { res.splice(Math.min(res.length, 4), 0, { code: jq, name: TW_NAMES[jq] || '日股（東證）', held: held.has(jq) }); res.length = Math.min(res.length, 5); }
+  return res;
 }
 function hl(text, q) { const i = text.toUpperCase().indexOf(q.toUpperCase()); return i < 0 ? esc(text) : esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length)); }
 let suggIdx = 0;
@@ -1556,7 +1601,7 @@ function showSugg(q) {
   const list = suggestCodes(q);
   if (!list.length || (list.length === 1 && list[0].code === String(q).trim().toUpperCase())) { box.hidden = true; box.innerHTML = ''; return; }
   suggIdx = 0;
-  box.innerHTML = list.map((x, i) => `<button type="button" role="option" data-pick="${esc(x.code)}" class="${i === 0 ? 'on' : ''}"><b>${hl(x.code, q.trim())}</b><span>${hl(x.name, q.trim())}</span>${x.held ? '<span class="tag">持有中</span>' : ''}</button>`).join('');
+  box.innerHTML = list.map((x, i) => `<button type="button" role="option" data-pick="${esc(x.code)}" class="${i === 0 ? 'on' : ''}"><b>${hl(x.code, q.trim())}</b><span>${hl(x.name, q.trim())}</span>${isJP(x.code) ? '<span class="tag jp-tag">日股</span>' : ''}${x.held ? '<span class="tag">持有中</span>' : ''}</button>`).join('');
   box.hidden = false;
 }
 function hideSugg() { const box = $('#x-sugg'); if (box) { box.hidden = true; box.innerHTML = ''; } }
@@ -1564,10 +1609,11 @@ function pickCode(code) {
   const sh = V.sheet, el = $('#x-code'); if (!sh || !el) return;
   el.value = code; sh.code = code;
   if (!sh.nameTouched) { delete sh.f.name; const n = $('#x-name'); if (n) n.value = stockName(code); }
-  for (const k of ['cash', 'other', 'stockSh', 'held', 'per', 'perStock']) delete sh.f[k];
-  sh.cashTouched = sh.sshTouched = sh.otherTouched = false; sh.ev = null; sh.filledFor = null;
-  hideSugg(); refreshSheetTotals();
+  for (const k of ['cash', 'other', 'stockSh', 'held', 'per', 'perStock', 'wtax']) delete sh.f[k];
+  sh.cashTouched = sh.sshTouched = sh.otherTouched = sh.wtaxTouched = false; sh.ev = null; sh.filledFor = null;
+  hideSugg(); if (sheetLayoutChanged()) renderSheet(); else refreshSheetTotals();
 }
+function sheetLayoutChanged() { const sh = V.sheet, j = isJP(sh.code); if (!!sh.wasJP === j) return false; sh.wasJP = j; return true; }
 document.addEventListener('pointerdown', e => { const b = e.target.closest('[data-pick]'); if (b) { e.preventDefault(); pickCode(b.dataset.pick); } else if (!e.target.closest('#x-code')) hideSugg(); });
 document.addEventListener('keydown', e => {
   if (e.target.id !== 'x-code') return;

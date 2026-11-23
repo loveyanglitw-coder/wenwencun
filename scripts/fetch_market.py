@@ -429,6 +429,87 @@ def er_api_fx():
     return {'USD': round(1 / r['USD'], 4), 'JPY': round(1 / r['JPY'], 5), 'date': TODAY.isoformat(), 'src': '國際匯率'}
 
 
+# ---------------- 日股（個人版）：只抓 Firestore「meta/jpwatch」列出、有人持有的日股 ----------------
+JP_RE = re.compile(r'^\d{3}[0-9A-Z]\.T$')
+JST = datetime.timezone(datetime.timedelta(hours=9))
+
+
+def jp_watch():
+    env = os.environ.get('JP_CODES')
+    if env:
+        return sorted({c.strip().upper() for c in env.split(',') if JP_RE.match(c.strip().upper())})
+    with open(os.path.join(ROOT, 'firebase-config.js'), encoding='utf-8') as f:
+        cfg = f.read()
+    pid = re.search(r'projectId:\s*"([^"]+)"', cfg).group(1)
+    key = re.search(r'apiKey:\s*"([^"]+)"', cfg).group(1)
+    d = get_json(f'https://firestore.googleapis.com/v1/projects/{pid}/databases/(default)/documents/meta/jpwatch?key={key}', tries=2)
+    vals = (((d.get('fields') or {}).get('codes') or {}).get('arrayValue') or {}).get('values') or []
+    return sorted({v.get('stringValue', '').upper() for v in vals if JP_RE.match(v.get('stringValue', '').upper())})
+
+
+def jp_name(code):
+    try:
+        t = get_text(f'https://finance.yahoo.co.jp/quote/{code}')
+        m = re.search(r'<title>([^<【]+)【', t)
+        if m:
+            n = html.unescape(m.group(1)).replace('(株)', '').replace('（株）', '').strip()
+            if n:
+                return n[:20]
+    except Exception as e:  # noqa: BLE001
+        say(f'  {code} 名稱：{e}')
+    return None
+
+
+def jp_yahoo(code):
+    d = get_json(f'https://query1.finance.yahoo.com/v8/finance/chart/{code}?range=7d&interval=1d', tries=2)
+    r = d['chart']['result'][0]
+    q = r['indicators']['quote'][0]
+    rows = [(t, c) for t, c in zip(r.get('timestamp') or [], q.get('close') or []) if c is not None]
+    if not rows:
+        raise RuntimeError('沒有收盤價')
+    t, c = rows[-1]
+    prev = rows[-2][1] if len(rows) > 1 else r['meta'].get('chartPreviousClose') or c
+    return {'price': round(c, 1), 'chg': round(c - prev, 1),
+            'date': datetime.datetime.fromtimestamp(t, JST).date().isoformat(),
+            'ename': r['meta'].get('shortName') or r['meta'].get('longName')}
+
+
+def jp_stooq(code):
+    t = get_text(f'https://stooq.com/q/l/?s={code[:-2].lower()}.jp&f=sd2c&h&e=csv')
+    row = t.strip().splitlines()[-1].split(',')
+    if len(row) < 3 or row[2] in ('N/D', ''):
+        raise RuntimeError('沒有資料')
+    return {'price': round(float(row[2]), 1), 'chg': 0, 'date': row[1]}
+
+
+def fetch_jp(old_prices):
+    try:
+        codes = jp_watch()
+    except Exception as e:  # noqa: BLE001
+        say(f'日股清單讀取失敗（Firestore 規則還沒開放 meta/jpwatch？）：{e}')
+        return {}
+    if not codes:
+        say('日股：沒有人持有，略過')
+        return {}
+    out = {}
+    for code in codes:
+        q = None
+        for fn in (jp_yahoo, jp_stooq):
+            try:
+                q = fn(code)
+                break
+            except Exception as e:  # noqa: BLE001
+                say(f'  {code} {fn.__name__}：{e}')
+        if not q:
+            continue
+        old = old_prices.get(code) or {}
+        name = old.get('name') or jp_name(code) or q.get('ename') or code
+        out[code] = {'price': q['price'], 'chg': q['chg'], 'name': name, 'date': q['date']}
+        time.sleep(0.5)
+    say(f'日股：{len(out)}/{len(codes)} 檔 ' + '、'.join(f"{c} ¥{v['price']}" for c, v in out.items()))
+    return out
+
+
 def main():
     try:
         with open(OUT, encoding='utf-8') as f:
@@ -466,6 +547,12 @@ def main():
             prices.update(p)
             new_date = max(new_date, d)
     price_changed = new_date != old_date
+    jp = fetch_jp(old.get('prices') or {})
+    for c, q in jp.items():
+        if (prices.get(c) or {}).get('date', '') <= q['date']:
+            if prices.get(c) != q:
+                price_changed = True
+            prices[c] = q
 
     rows = []
     for label, fn in (('上市', twse_events), ('上櫃', tpex_events)):
