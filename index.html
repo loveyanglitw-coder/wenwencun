@@ -1407,8 +1407,13 @@ document.addEventListener('click', e => {
     case 'showLogin': V.needLogin = true; V.browseDemo = false; FB.err = ''; break;
     case 'googleLogin': {
       const pv = new firebase.auth.GoogleAuthProvider();
-      const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-      (standalone ? FB.auth.signInWithRedirect(pv) : FB.auth.signInWithPopup(pv)).catch(e => { if (e.code === 'auth/popup-blocked') return FB.auth.signInWithRedirect(pv); FB.err = loginError(e); render(); });
+      pv.setCustomParameters({ prompt: 'select_account' });
+      // 一律用彈出視窗登入：GitHub Pages 和 Firebase 登入頁不同網域，iPhone Safari 用「跳轉」登入會拿不到登入結果，一直回到登入畫面
+      FB.auth.signInWithPopup(pv).catch(e => {
+        if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') { FB.err = '瀏覽器擋住了登入視窗：請允許彈出式視窗，或改用 Safari／Chrome 打開這個網址再登入'; render(); return; }
+        if (e.code === 'auth/cancelled-popup-request' || e.code === 'auth/popup-closed-by-user') return;
+        FB.err = loginError(e); render();
+      });
       return;
     }
     case 'emailLogin': case 'emailSignup': {
