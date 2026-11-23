@@ -2,7 +2,7 @@
 
 台股存股記帳 App。
 
-- 公開版：`https://loveyanglitw-coder.github.io/wenwencun/` — 任何人用 Google 帳號登入，每人一份自己的帳本。
+- 公開版：`https://loveyanglitw-coder.github.io/wenwencun/` — 任何人用 Email 與密碼註冊登入，每人一份自己的帳本。
 - 個人版：`https://loveyanglitw-coder.github.io/wenwencun/me/` — 只限擁有者帳號。
 
 ## 運作方式
