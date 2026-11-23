@@ -253,6 +253,142 @@ def merge_events(old, rows):
     return {c: sorted(d.values(), key=lambda x: x['ex']) for c, d in ev.items() if d}, added
 
 
+# ---------------- 發放日（Yahoo股市股利政策、MoneyDJ ETF 配息紀錄） ----------------
+
+def get_text(url):
+    req = urllib.request.Request(url, headers={**UA, 'Accept': 'text/html,application/xhtml+xml'})
+    with urllib.request.urlopen(req, timeout=40) as r:
+        return r.read().decode('utf-8', 'replace')
+
+
+def grab_json(h, key, open_ch, close_ch):
+    i = h.find(key)
+    if i < 0:
+        return None
+    i += len(key) - 1
+    dep, instr, j = 0, False, i
+    while j < len(h):
+        c = h[j]
+        if instr:
+            if c == '\\':
+                j += 1
+            elif c == '"':
+                instr = False
+        elif c == '"':
+            instr = True
+        elif c == open_ch:
+            dep += 1
+        elif c == close_ch:
+            dep -= 1
+            if dep == 0:
+                return json.loads(h[i:j + 1])
+        j += 1
+    return None
+
+
+def iso(s):
+    m = re.search(r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})', str(s or ''))
+    return f'{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}' if m else None
+
+
+def yahoo_dividends(code, otc=False):
+    """回傳 [{ex, cash, stock, pay}]；Yahoo 股利政策頁內嵌的 dividends 資料"""
+    for suf in (('.TWO', '.TW') if otc else ('.TW', '.TWO')):
+        try:
+            h = get_text(f'https://tw.stock.yahoo.com/quote/{code}{suf}/dividend')
+        except Exception:  # noqa: BLE001
+            continue
+        lst = grab_json(h, '"dividends":[', '[', ']')
+        if lst is None:
+            continue
+        out = {}
+        for x in lst:
+            if x.get('recordType') == 'YEAR':
+                continue
+            xd, xr = x.get('exDividend') or {}, x.get('exRight') or {}
+            ex = iso(x.get('exDate')) or iso(xd.get('date')) or iso(xr.get('date'))
+            cash, stock = num((xd.get('cash') or {}).get('raw') if isinstance(xd.get('cash'), dict) else xd.get('cash')), num((xr.get('stock') or {}).get('raw') if isinstance(xr.get('stock'), dict) else xr.get('stock'))
+            if not ex or not (cash or stock):
+                continue
+            e = out.setdefault(ex, {'ex': ex, 'cash': 0, 'stock': 0})
+            e['cash'] = round(e['cash'] + (cash or 0), 6)
+            e['stock'] = round(e['stock'] + (stock or 0), 6)
+            pay = iso(xd.get('cashPayDate')) or iso(xr.get('stockPayDate'))
+            if pay:
+                e['pay'] = pay
+        return list(out.values())
+    raise RuntimeError('Yahoo 找不到股利資料')
+
+
+def moneydj_dividends(code):
+    """ETF：MoneyDJ 配息紀錄（除息日、發放日、配息金額）"""
+    h = get_text(f'https://www.moneydj.com/etf/x/basic/basic0005.xdjhtm?etfid={code.lower()}.tw')
+    out = []
+    for tb in re.findall(r'<table[^>]*>(.*?)</table>', h, re.S):
+        if '除息日' not in tb or '發放日' not in tb:
+            continue
+        rows = re.findall(r'<tr[^>]*>(.*?)</tr>', tb, re.S)
+        head = None
+        for r in rows:
+            cells = [html.unescape(re.sub(r'<[^>]*>', '', c)).strip() for c in re.findall(r'<t[hd][^>]*>(.*?)</t[hd]>', r, re.S)]
+            if head is None:
+                if '除息日' in cells:
+                    head = cells
+                continue
+            if len(cells) < len(head):
+                continue
+            row = dict(zip(head, cells))
+            ex, pay = iso(row.get('除息日')), iso(row.get('發放日'))
+            cash = num(next((v for k, v in row.items() if '配息金額' in k or k in ('配息', '每單位配息')), None))
+            if ex and cash:
+                e = {'ex': ex, 'cash': cash, 'stock': 0}
+                if pay:
+                    e['pay'] = pay
+                out.append(e)
+    if not out:
+        raise RuntimeError('MoneyDJ 找不到配息紀錄')
+    return out
+
+
+def fill_details(events, prices, otc_codes):
+    """補發放日：除息日在 7 天前之後、還沒有發放日的股票都查一次；每週一另外掃全部 ETF，補上已公告但還沒進官方預告表的配息"""
+    since = (TODAY - datetime.timedelta(days=7)).isoformat()
+    targets = {c for c, lst in events.items() if any(e['ex'] >= since and not e.get('pay') for e in lst)}
+    weekly = (TODAY.weekday() == 0 and NOW.hour < 17) or os.environ.get('FULL_SCAN') == 'true'
+    if weekly:
+        targets |= {c for c in prices if c.startswith('00')}
+    filled = added = fails = 0
+    for code in sorted(targets):
+        got = None
+        try:
+            got = yahoo_dividends(code, code in otc_codes)
+        except Exception:  # noqa: BLE001
+            if code.startswith('00'):
+                try:
+                    got = moneydj_dividends(code)
+                except Exception:  # noqa: BLE001
+                    pass
+        if got is None:
+            fails += 1
+            continue
+        cur = {e['ex']: e for e in events.get(code, [])}
+        for g in got:
+            if g['ex'] < since:
+                continue
+            e = cur.get(g['ex'])
+            if e is None:
+                cur[g['ex']] = g
+                added += 1
+            elif g.get('pay') and not e.get('pay'):
+                e['pay'] = g['pay']
+                filled += 1
+        if cur:
+            events[code] = sorted(cur.values(), key=lambda x: x['ex'])
+        time.sleep(0.4)
+    say(f'發放日補齊：查 {len(targets)} 檔（{"含每週 ETF 掃描" if weekly else "只查缺發放日的"}），補發放日 {filled} 筆、新增配息 {added} 筆、查不到 {fails} 檔')
+    return events
+
+
 def main():
     try:
         with open(OUT, encoding='utf-8') as f:
@@ -300,6 +436,10 @@ def main():
         except Exception as e:  # noqa: BLE001
             say(f'{label}除權息預告失敗：{e}')
     events, added = merge_events(old.get('events'), rows)
+    try:
+        events = fill_details(events, prices, set(p2))
+    except Exception as e:  # noqa: BLE001
+        say(f'補發放日失敗：{e}')
     say(f'除權息合計 {sum(len(v) for v in events.values())} 筆（新增 {added}）')
 
     if not prices:
@@ -309,7 +449,7 @@ def main():
         'date': new_date,
         'updated': NOW.strftime('%Y-%m-%d %H:%M'),
         'source': '臺灣證券交易所、櫃買中心',
-        'sources': {'股價': f'上市 {d1 or "無"}、上櫃 {d2 or "無"}，共 {len(prices)} 檔', '除權息': '證交所、櫃買中心除權除息預告表'},
+        'sources': {'股價': f'上市 {d1 or "無"}、上櫃 {d2 or "無"}，共 {len(prices)} 檔', '除權息': '證交所、櫃買中心預告表；發放日：Yahoo股市、MoneyDJ'},
         'prices': dict(sorted(prices.items())),
         'events': dict(sorted(events.items())),
     }
