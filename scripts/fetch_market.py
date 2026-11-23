@@ -5,7 +5,7 @@
 - 上市收盤價：證交所「每日收盤行情」MI_INDEX；抓不到再用證交所 OpenAPI STOCK_DAY_ALL。
 - 上櫃收盤價：櫃買中心「上櫃股票行情」dailyQ；抓不到再用櫃買 OpenAPI。
 - 除權息：證交所 OpenAPI「除權除息預告表」TWT48U_ALL、櫃買 OpenAPI 除權息預告。官方預告沒有發放日，
-  舊資料裡已有的發放日會保留。
+  近期還沒有發放日的，到 Yahoo股市股利政策頁補上；舊資料裡已有的發放日會保留。
 
 規則：
 - 只有拿到「比舊資料新」的交易日收盤價才更新股價；拿到的還是舊的一天就保留原本股價。
@@ -389,6 +389,81 @@ def fill_details(events, prices, otc_codes):
     return events
 
 
+# ---------------- 發放日（Yahoo股市股利政策頁） ----------------
+
+def grab_json(text, key, open_ch, close_ch):
+    i = text.find(key)
+    if i < 0:
+        return None
+    i += len(key) - 1
+    dep, instr, j = 0, False, i
+    while j < len(text):
+        c = text[j]
+        if instr:
+            if c == '\\':
+                j += 1
+            elif c == '"':
+                instr = False
+        elif c == '"':
+            instr = True
+        elif c == open_ch:
+            dep += 1
+        elif c == close_ch:
+            dep -= 1
+            if dep == 0:
+                return json.loads(text[i:j + 1])
+        j += 1
+    return None
+
+
+def yahoo_dividends(code):
+    for suf in ('.TW', '.TWO'):
+        try:
+            req = urllib.request.Request(f'https://tw.stock.yahoo.com/quote/{code}{suf}/dividend', headers={**UA, 'Accept': 'text/html'})
+            with urllib.request.urlopen(req, timeout=40) as r:
+                h = r.read().decode('utf-8', 'replace')
+        except Exception:  # noqa: BLE001
+            continue
+        q = grab_json(h, '"quote":{"data":{', '{', '}') or {}
+        if str(q.get('systexId', '')).upper() != code:
+            continue
+        out = {}
+        for x in grab_json(h, '"dividends":[', '[', ']') or []:
+            if x.get('recordType') == 'YEAR':
+                continue
+            xd, xr = x.get('exDividend') or {}, x.get('exRight') or {}
+            ex = (str(x.get('exDate') or xd.get('date') or xr.get('date') or ''))[:10]
+            if not re.match(r'^\d{4}-\d{2}-\d{2}$', ex):
+                continue
+            e = out.setdefault(ex, {'ex': ex, 'cash': 0.0, 'stock': 0.0})
+            e['cash'] = round(e['cash'] + (num((xd.get('cash') or {}).get('raw') if isinstance(xd.get('cash'), dict) else xd.get('cash')) or 0), 6)
+            e['stock'] = round(e['stock'] + (num((xr.get('stock') or {}).get('raw') if isinstance(xr.get('stock'), dict) else xr.get('stock')) or 0), 6)
+            pay = str(xd.get('cashPayDate') or xr.get('stockPayDate') or '')[:10]
+            if re.match(r'^\d{4}-\d{2}-\d{2}$', pay):
+                e['pay'] = pay
+        return out
+    return None
+
+
+def fill_pay_dates(events, limit=150):
+    """近期（未來或 30 天內）還沒有發放日的除權息，到 Yahoo股市股利政策頁補發放日"""
+    since = (TODAY - datetime.timedelta(days=30)).isoformat()
+    todo = sorted({c for c, lst in events.items() for e in lst if e['ex'] >= since and not e.get('pay')})[:limit]
+    filled = checked = 0
+    for code in todo:
+        yd = yahoo_dividends(code)
+        checked += 1
+        time.sleep(0.4)
+        if not yd:
+            continue
+        for e in events[code]:
+            y = yd.get(e['ex'])
+            if y and y.get('pay') and not e.get('pay'):
+                e['pay'] = y['pay']
+                filled += 1
+    say(f'發放日：查了 {checked} 檔，補上 {filled} 筆')
+
+
 def main():
     try:
         with open(OUT, encoding='utf-8') as f:
@@ -436,6 +511,10 @@ def main():
         except Exception as e:  # noqa: BLE001
             say(f'{label}除權息預告失敗：{e}')
     events, added = merge_events(old.get('events'), rows)
+    try:
+        fill_pay_dates(events)
+    except Exception as e:  # noqa: BLE001
+        say(f'補發放日失敗：{e}')
     try:
         events = fill_details(events, prices, set(p2))
     except Exception as e:  # noqa: BLE001
