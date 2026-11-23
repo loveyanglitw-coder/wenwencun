@@ -81,6 +81,7 @@ a{color:var(--accent)}
 .tile{background:var(--card);color:var(--ink);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:2px;border:0;text-align:left}
 .tile .v{font:700 22px var(--f-num)}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px}
+.cur-seg{display:flex;background:var(--sunk);border-radius:999px;padding:3px;gap:2px}.cur-seg button{white-space:nowrap;border:0;background:transparent;font:inherit;font-size:12px;padding:6px 9px;border-radius:999px;color:var(--muted);cursor:pointer}.cur-seg button[aria-pressed=true]{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}.cur-seg button:disabled{opacity:.4;cursor:default}
 .grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 6px}.grid4 .v{font-size:14px!important}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 8px}
 .kv{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -194,10 +195,16 @@ const md = iso => iso ? (+iso.slice(5, 7)) + '/' + iso.slice(8, 10) : '';
 const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 const num = v => { const n = parseFloat(String(v ?? '').replace(/[,\s$]/g, '')); return isFinite(n) ? n : 0; };
 const grp = (n, d = 0) => (isFinite(n) ? n : 0).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+// 顯示幣別：帳本一律以新台幣記錄，切到日幣／美元時用台灣銀行即期中價換算後顯示
+const CURS = { TWD: { sym: '$', name: '新台幣', d: 0 }, JPY: { sym: '¥', name: '日幣', d: 0 }, USD: { sym: 'US$', name: '美元', d: 0 } };
+let FORCE_TWD = false;
+function curCode() { const c = S.settings.currency; return !FORCE_TWD && c && c !== 'TWD' && CURS[c] && MARKET && MARKET.fx && MARKET.fx[c] ? c : 'TWD'; }
 function money(n, opt = {}) {
   if (S.settings.hide && !opt.show) return '＊＊＊＊';
-  const v = Math.round(n || 0), s = v < 0 ? '−' : (opt.plus && v > 0 ? '+' : '');
-  return s + '$' + grp(Math.abs(v));
+  const c = opt.twd ? 'TWD' : curCode(), cur = CURS[c], rate = c === 'TWD' ? 1 : MARKET.fx[c];
+  const x = (n || 0) / rate, d = cur.d && Math.abs(x) < 100000 ? cur.d : 0;
+  const v = d ? Math.round(x * 100) / 100 : Math.round(x), s = v < 0 ? '−' : (opt.plus && v > 0 ? '+' : '');
+  return s + cur.sym + grp(Math.abs(v), d);
 }
 const pct = (r, d = 2, plus = true) => (r > 0 && plus ? '+' : r < 0 ? '−' : '') + grp(Math.abs(r * 100), d) + '%';
 const arrow = n => n > 0 ? '▲ ' : n < 0 ? '▼ ' : '';
@@ -455,6 +462,14 @@ async function initFirebase(cfg) {
       applyMarket(); autoPost(); render();
     }, e => { toast('讀取雲端資料失敗：' + (e.code || e.message)); });
   });
+}
+function curChip() {
+  const c = S.settings.currency || 'TWD', ok = MARKET && MARKET.fx;
+  return `<div class="cur-seg" role="group" aria-label="顯示幣別">${Object.keys(CURS).map(k => `<button data-a="cur" data-v="${k}" aria-pressed="${c === k}" ${k !== 'TWD' && !ok ? 'disabled title="還沒有匯率資料"' : ''}>${k === 'TWD' ? '台幣' : k === 'JPY' ? '日幣' : '美元'}</button>`).join('')}</div>`;
+}
+function fxNote() {
+  const c = curCode(); if (c === 'TWD') return '';
+  return `<div class="small" style="text-align:center;margin:0 0 6px">以${CURS[c].name}顯示・1 ${c === 'USD' ? '美元' : '日圓'} ＝ ${MARKET.fx[c]} 台幣・台銀即期 ${esc((MARKET.fx.date || '').slice(5).replace('-', '/'))}</div>`;
 }
 function rememberedEmail() { try { return localStorage.getItem('wwc-email') || ''; } catch (e) { return ''; } }
 function loginError(e) {
@@ -736,9 +751,11 @@ function pageHome(a, m) {
   const pdate = m.holds.map(h => (S.stocks[h.code] || {}).pdate).filter(Boolean).sort().pop();
   return `
   <div class="top">${topAcc(a)}
+    ${curChip()}
     <button class="ibtn" data-a="hide" aria-label="${S.settings.hide ? '顯示金額' : '隱藏金額'}">${ic(S.settings.hide ? 'eyeoff' : 'eye')}</button>
     <button class="ibtn" data-a="go" data-v="accounts" aria-label="設定">${ic('gear')}</button>
   </div>
+  ${fxNote()}
   <section class="hero">
     <div><div class="lbl">總價值（股票市值）</div><div class="big">${money(m.mv)}</div><div class="lbl" style="font-size:12px">${pdate ? '股價 ' + roc(pdate) : '尚未有股價'}${m.todayPL ? `・今日 <span class="${m.todayPL > 0 ? 'upc' : 'downc'} num">${arrow(m.todayPL)}${money(m.todayPL, { plus: true })}</span>` : ''}</div></div>
     <div style="display:flex;flex-direction:column;gap:8px">
@@ -868,7 +885,7 @@ function pageLedger(a, m) {
       (() => { const ln = sortTx(a.txns.filter(t => t.type === 'loan')).reverse(); return `<div class="h2row"><h2 style="font-size:15px">單獨記錄的利息</h2><span class="small">沒有股利的月份，從累計股息扣除</span></div>` + (ln.length ? `<div class="list">${ln.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><span class="tag" style="background:var(--gold-soft);color:var(--gold)">利息</span><div class="main"><span class="t">${esc(t.memo || '利息')}</span><span class="st num">${roc(t.date)}</span></div><b class="num">−${money(t.amount)}</b>${delBtn(t.id)}</div>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有利息紀錄</div></div>`); })() +
       '';
   }
-  return `<div class="top">${topAcc(a)}</div>
+  return `<div class="top">${topAcc(a)}${curChip()}</div>${fxNote()}
     ${segBar([['cash', '帳戶交易'], ['hold', '庫存損益'], ['real', '實現損益'], ['div', '股票股利']], V.ledger, 'ledger')}
     <div class="card pad ${V.ledger === 'div' ? 'grid4' : 'grid3'}">${sum}</div>${body}`;
 }
@@ -1202,7 +1219,8 @@ function divForm(a, sh) { // live dividend math from 庫存 × 每股股利; eve
   const interest = num(f.interest), orig = cash;
   return { curHeld, held, per, perStock, cash, stockSh, other, interest, orig, fin: cash - other - interest };
 }
-function renderSheet(only) {
+function renderSheet(only) { FORCE_TWD = true; try { return renderSheetInner(only); } finally { FORCE_TWD = false; } }
+function renderSheetInner(only) {
   const sh = V.sheet, t = sh.type, f = sh.f, a = sheetAcc(), m = compute(a);
   const codes = Object.keys(S.stocks).sort();
   const field = (id, label, inner, extra) => `<div class="field ${extra || ''}"><label for="${id}">${label}</label>${inner}</div>`;
@@ -1360,6 +1378,7 @@ document.addEventListener('click', e => {
     case 'back': if (V.prev && V.prev.page && V.prev.page !== V.page) { V.page = V.prev.page; V.code = V.prev.code; V.prev = null; } else V.page = null; scrollTo(0, 0); break;
     case 'stock': V.prev = { tab: V.tab, page: V.page, code: V.code }; V.page = 'stock'; V.code = v; scrollTo(0, 0); break;
     case 'hide': S.settings.hide = !S.settings.hide; persist(); break;
+    case 'cur': S.settings.currency = v; persist(); break;
     case 'metric': V.metric = v; break;
     case 'ledger': V.ledger = v; break;
     case 'hist': V.hist = v; break;

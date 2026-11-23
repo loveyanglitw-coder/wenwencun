@@ -389,6 +389,32 @@ def fill_details(events, prices, otc_codes):
     return events
 
 
+# ---------------- 匯率（台灣銀行牌告，即期買入與賣出的中價） ----------------
+
+def bot_fx():
+    req = urllib.request.Request('https://rate.bot.com.tw/xrt/flcsv/0/day', headers={**UA, 'Accept': 'text/csv,*/*'})
+    with urllib.request.urlopen(req, timeout=40) as r:
+        raw = r.read()
+    text = raw.decode('utf-8-sig', 'replace')
+    out = {}
+    for line in text.splitlines():
+        cols = [c.strip() for c in line.split(',')]
+        if not cols or cols[0] not in ('USD', 'JPY'):
+            continue
+        try:
+            b = cols.index('本行買入') if '本行買入' in cols else 1
+            sidx = cols.index('本行賣出') if '本行賣出' in cols else 11
+            buy, sell = num(cols[b + 2]), num(cols[sidx + 2])  # 現金、即期 → 取即期
+        except (ValueError, IndexError):
+            continue
+        if buy and sell:
+            out[cols[0]] = round((buy + sell) / 2, 4)
+    if 'USD' not in out or 'JPY' not in out:
+        raise RuntimeError('台灣銀行匯率格式不符')
+    out['date'] = TODAY.isoformat()
+    return out
+
+
 def main():
     try:
         with open(OUT, encoding='utf-8') as f:
@@ -442,6 +468,14 @@ def main():
         say(f'補發放日失敗：{e}')
     say(f'除權息合計 {sum(len(v) for v in events.values())} 筆（新增 {added}）')
 
+    fx = old.get('fx')
+    try:
+        new_fx = bot_fx()
+        if not fx or {k: v for k, v in new_fx.items() if k != 'date'} != {k: v for k, v in fx.items() if k != 'date'}:
+            fx = new_fx
+        say(f"匯率：1 USD = {new_fx['USD']}、1 JPY = {new_fx['JPY']} 新台幣")
+    except Exception as e:  # noqa: BLE001
+        say(f'匯率抓取失敗，沿用舊的：{e}')
     if not prices:
         say('沒有任何股價資料，不寫入')
         sys.exit(1)
@@ -452,8 +486,9 @@ def main():
         'sources': {'股價': f'上市 {d1 or "無"}、上櫃 {d2 or "無"}，共 {len(prices)} 檔', '除權息': '證交所、櫃買中心預告表；發放日：Yahoo股市、MoneyDJ'},
         'prices': dict(sorted(prices.items())),
         'events': dict(sorted(events.items())),
+        'fx': fx,
     }
-    if not price_changed and data['events'] == (old.get('events') or {}):
+    if not price_changed and data['events'] == (old.get('events') or {}) and fx == old.get('fx'):
         say(f'股價仍是 {old_date}，除權息也沒有變動，不更新')
         return
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
