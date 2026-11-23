@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0E6B56">
+<title>穩穩存</title>
+<script id="market-data" type="application/json">{}</script>
+<script id="names-data" type="application/json">{}</script>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="穩穩存">
+<script src="firebase-config.js"></script>
+<script src="edition.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Outfit:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one phone-width column (max 480px), sticky top bar, fixed bottom tab bar, bottom sheet for 記一筆 */
+:root{
+  --bg:#F3F5F2; --card:#FFFFFF; --sunk:#E6ECE9; --line:#DCE3DF; --line2:#EDF1EE;
+  --ink:#14211C; --muted:#5B6B64; --accent:#0E6B56; --accent-ink:#FFFFFF; --accent-soft:#E0EFEA;
+  --hero:#14211C; --hero-ink:#FFFFFF; --hero-muted:#B9C7C1;
+  --up:#C8302A; --down:#17803F; --gold:#A86A12; --gold-soft:#FBF3E6; --gold-bar:#E3C48F;
+  --ex:#2F5DA8; --last:#0E8F9E; --pay:#C9930E;
+  --c1:#0E6B56; --c2:#A86A12; --c3:#2F5DA8; --c4:#9A5A8C; --c5:#6F8F3A; --c6:#9AA8A2;
+  --f-num:"Outfit","Noto Sans TC",system-ui,sans-serif;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1614; --card:#18221F; --sunk:#22302B; --line:#2B3A35; --line2:#22302B;
+  --ink:#E6EEEA; --muted:#98A9A2; --accent:#4FB79C; --accent-ink:#0B1411; --accent-soft:#1D3530;
+  --hero:#0A110F; --hero-ink:#FFFFFF; --hero-muted:#A9BAB3;
+  --up:#FF6B61; --down:#41C47C; --gold:#E2A84A; --gold-soft:#2C2416; --gold-bar:#8C6A33;
+  --ex:#7FA2E6; --last:#4CC3CF; --pay:#E7B53D;
+  --c1:#4FB79C; --c2:#E2A84A; --c3:#7FA2E6; --c4:#CF8FC0; --c5:#A3C46A; --c6:#8F9E99; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1614; --card:#18221F; --sunk:#22302B; --line:#2B3A35; --line2:#22302B;
+  --ink:#E6EEEA; --muted:#98A9A2; --accent:#4FB79C; --accent-ink:#0B1411; --accent-soft:#1D3530;
+  --hero:#0A110F; --hero-ink:#FFFFFF; --hero-muted:#A9BAB3;
+  --up:#FF6B61; --down:#41C47C; --gold:#E2A84A; --gold-soft:#2C2416; --gold-bar:#8C6A33;
+  --ex:#7FA2E6; --last:#4CC3CF; --pay:#E7B53D;
+  --c1:#4FB79C; --c2:#E2A84A; --c3:#7FA2E6; --c4:#CF8FC0; --c5:#A3C46A; --c6:#8F9E99; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.up{color:var(--up)}.down{color:var(--down)}.gold{color:var(--gold)}.muted{color:var(--muted)}
+#app{max-width:480px;margin:0 auto;padding:calc(env(safe-area-inset-top,0px) + 8px) max(16px,env(safe-area-inset-right,0px)) calc(100px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:12px}
+.top{display:flex;align-items:center;gap:4px;min-height:52px}
+.top h1{margin:0;font-size:21px;font-weight:700;flex:1}
+.acc-wrap{position:relative;margin-right:auto}
+.acc-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:200px;z-index:50;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column}
+.acc-menu button{display:flex;align-items:center;gap:10px;height:44px;padding:0 10px;border:0;border-radius:10px;background:none;color:var(--ink);font:inherit;font-size:15px;text-align:left}
+.acc-menu button[aria-selected="true"]{background:var(--accent-soft)}
+.acc-menu .nm{flex:1}.acc-menu .ck{color:var(--accent);font-weight:700}
+.acc-menu .av{width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:13px;font-weight:700}
+.chip-acc{display:flex;align-items:center;gap:8px;height:40px;padding:0 14px 0 6px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-weight:500;margin-right:auto}
+.av{width:28px;height:28px;border-radius:999px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+.ibtn{width:44px;height:44px;border:0;background:transparent;display:grid;place-items:center;border-radius:12px;color:var(--ink)}
+.ibtn svg{width:22px;height:22px}
+.card{background:var(--card);border-radius:16px}
+.pad{padding:14px 16px}
+.h2row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:8px 4px 0}
+.h2row h2{margin:0;font-size:17px;font-weight:700}
+.small{font-size:12px;color:var(--muted)}
+.hero{background:var(--hero);color:var(--hero-ink);border-radius:22px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.hero .lbl{font-size:13px;color:var(--hero-muted)}
+.hero .big{font:700 36px/1.1 var(--f-num);letter-spacing:-1px}
+.hrow{display:flex;justify-content:space-between;align-items:center;font-size:14px;gap:8px}
+.hrow>span:first-child{color:var(--hero-muted)}
+.pill{font:600 12px var(--f-num);padding:2px 8px;border-radius:6px}
+.pill.up{background:rgba(255,107,97,.18);color:#FF8A80}.pill.down{background:rgba(65,196,124,.18);color:#6BD894}
+.hero .upc{color:#FF8A80}.hero .downc{color:#6BD894}.hero .goldc{color:#F2C46B}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.tile{background:var(--card);color:var(--ink);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:2px;border:0;text-align:left}
+.tile .v{font:700 22px var(--f-num)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 6px}.grid4 .v{font-size:14px!important}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 8px}
+.kv{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kv .k{font-size:12px;color:var(--muted)}
+.kv .v{font:600 17px var(--f-num);overflow-wrap:anywhere}
+.kv .s{font-size:11px;color:var(--muted)}
+.seg{display:grid;gap:4px;background:var(--sunk);padding:4px;border-radius:12px}
+.pl-seg{grid-template-columns:1fr 1fr}.pl-seg button{height:34px;font-size:13px}
+.seg button{height:40px;border:0;border-radius:9px;background:transparent;color:var(--muted);font-weight:500;font-size:14px;padding:0 2px}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(20,33,28,.16)}
+.list{background:var(--card);border-radius:16px;display:flex;flex-direction:column}
+.row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line2);min-width:0}
+.row:last-child{border-bottom:0}
+.row .main{flex:1;min-width:0;display:flex;flex-direction:column}
+.row .t{font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .st{font-size:12px;color:var(--muted)}
+.row .r{display:flex;flex-direction:column;align-items:flex-end;flex:none}
+.rowbtn{width:100%;border:0;background:transparent;text-align:left;color:var(--ink)}
+.tag{display:inline-grid;place-items:center;min-width:36px;height:36px;padding:0 6px;border-radius:10px;font-size:12px;font-weight:700;flex:none}
+.bar{height:10px;border-radius:999px;background:var(--sunk);overflow:hidden}
+.bar>span{display:block;height:100%;border-radius:999px;background:var(--accent)}
+.btn{height:48px;border-radius:14px;border:1px solid var(--line);background:var(--card);padding:0 16px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.btn.small{height:36px;border-radius:10px;font-size:13px;padding:0 12px}
+.btn.danger{color:var(--up);border-color:var(--up)}
+.btn.ghost{border-color:transparent;background:transparent}
+.field{display:flex;flex-direction:column;gap:4px;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:var(--card);min-width:0}
+.field.focus{border:2px solid var(--accent)}
+.field label,.field .k{font-size:12px;color:var(--muted)}
+.field input,.field select{border:0;padding:0;background:transparent;outline:none;width:100%;min-width:0;font-size:16px}
+.field input.bignum{font:700 26px var(--f-num)}
+.row.tap{cursor:pointer}.row.tap:hover{background:var(--sunk)}.row.tap:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.hold-list{display:flex;flex-direction:column;gap:16px}
+.hold-card{display:flex;flex-direction:column;width:100%;padding:0;text-align:left;background:var(--card);border:1.5px solid var(--line);border-left:6px solid var(--muted);border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);color:inherit;font:inherit}
+.hold-card.up{border-left-color:var(--up)}.hold-card.down{border-left-color:var(--down)}
+.hold-head{display:flex;flex-direction:column;gap:6px;padding:12px 14px;background:var(--sunk);border-bottom:1px solid var(--line)}.hold-title{display:flex;align-items:center;gap:10px;min-width:0}
+.hold-code{font-weight:700;font-size:15px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:2px 8px;flex:none}
+.hold-name{flex:1;min-width:0;font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hold-price{display:flex;align-items:baseline;gap:8px;font-size:13px}.hold-price .s{color:var(--muted);font-size:12px}.hold-price b{font-size:16px;font-weight:700}
+.hold-body{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:12px 14px 14px}
+.pick-wrap{position:relative}
+.sugg{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:40;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.16);overflow:hidden}
+.sugg button{display:flex;align-items:baseline;gap:10px;width:100%;padding:11px 14px;border:0;border-top:1px solid var(--line2);background:none;color:var(--ink);font:inherit;font-size:15px;text-align:left;cursor:pointer}
+.sugg button:first-child{border-top:0}
+.sugg button:hover,.sugg button.on{background:var(--accent-soft)}
+.sugg b{font-family:var(--f-num);min-width:64px}
+.sugg mark{background:none;color:var(--accent);font-weight:700}
+.sugg .tag{margin-left:auto;font-size:11px;color:var(--muted)}
+.field .unit{font-size:14px;color:var(--muted)}
+.banner{border-radius:14px;padding:12px 14px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner.warn{background:var(--gold-soft);border:1px solid var(--gold)}
+.banner.info{background:var(--accent-soft);color:var(--ink)}
+.banner .sp{flex:1;min-width:180px}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:14px}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);border-top:1px solid var(--line);padding:6px max(8px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+nav.tabs .in{max-width:480px;margin:0 auto;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:center}
+nav.tabs button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);padding:4px 0}
+nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:700}
+nav.tabs svg{width:24px;height:24px}
+nav.tabs .plus{justify-self:center;width:52px;height:52px;border-radius:18px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;padding:0}
+.sheet-bg{position:fixed;inset:0;z-index:40;background:rgba(10,20,16,.5);display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:480px;max-height:calc(100% - 24px - env(safe-area-inset-top,0px));overflow-y:auto;background:var(--card);border-radius:24px 24px 0 0;padding:10px max(18px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:12px}
+.sheet>*{flex-shrink:0}
+.grab{width:40px;height:5px;border-radius:999px;background:var(--line);align-self:center}
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:14px;max-width:calc(100% - 32px);text-align:center}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));text-align:center}
+.cal .d{height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;background:transparent;padding:0}
+.cal .d b{width:32px;height:32px;border-radius:999px;display:grid;place-items:center;font:500 15px var(--f-num)}
+.cal .d.today b{background:var(--accent);color:var(--accent-ink)}
+.cal .d.sel b{outline:2px solid var(--accent)}
+.cal .d.other b{color:var(--line)}
+.dots{display:flex;gap:2px;height:6px}.dots i{width:6px;height:6px;border-radius:999px;display:block}
+.tbl{display:grid;gap:6px;padding:11px 16px;border-bottom:1px solid var(--line2);align-items:center;font:500 14px var(--f-num)}
+.tbl.h{font:400 11px var(--f-body);color:var(--muted);padding:10px 16px}
+.right{text-align:right}
+.switch{width:46px;height:28px;border-radius:999px;background:var(--line);position:relative;border:0;flex:none;padding:0}
+.switch::after{content:"";position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:999px;background:#fff;transition:left .15s}
+.switch[aria-checked="true"]{background:var(--accent)}.switch[aria-checked="true"]::after{left:21px}
+.hbars{height:132px;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:5px;align-items:end;border-bottom:1px solid var(--line)}
+.hbars div{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:132px}
+.hbars span{font:500 9px var(--f-num);color:var(--gold);padding-bottom:3px;white-space:nowrap}
+.hbars i{display:block;width:100%;border-radius:4px 4px 1px 1px;background:var(--gold-bar)}
+.hbars i.cur{background:var(--gold)}
+.mlabels{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:5px;text-align:center;font:400 10px var(--f-num);color:var(--muted)}
+.tl{display:flex;gap:12px}.tl .m{width:44px;display:flex;flex-direction:column;align-items:center;flex:none;font:700 16px var(--f-num)}
+.tl .m i{width:2px;flex:1;background:var(--line);margin-top:6px}
+.tl .c{flex:1;min-width:0;margin-bottom:12px;display:flex;flex-direction:column;gap:6px}
+.lr{display:flex;justify-content:space-between;gap:8px;font-size:13px}.lr>span:first-child{color:var(--muted)}
+.lr b{font:500 14px var(--f-num)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app" aria-live="polite"></div>
+<nav class="tabs" id="nav" aria-label="主選單"></nav>
+<div id="sheetRoot"></div>
+<div class="toast" id="toast" hidden></div>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<script>
+(function(){
+'use strict';
+
+/* ================= utilities ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const todayISO = () => { const t = new Date(); t.setMinutes(t.getMinutes() - t.getTimezoneOffset()); return t.toISOString().slice(0, 10); };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const roc = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return (y - 1911) + '/' + m + '/' + d; };
+const md = iso => iso ? (+iso.slice(5, 7)) + '/' + iso.slice(8, 10) : '';
+const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+const num = v => { const n = parseFloat(String(v ?? '').replace(/[,\s$]/g, '')); return isFinite(n) ? n : 0; };
+const grp = (n, d = 0) => (isFinite(n) ? n : 0).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+function money(n, opt = {}) {
+  if (S.settings.hide && !opt.show) return '＊＊＊＊';
+  const v = Math.round(n || 0), s = v < 0 ? '−' : (opt.plus && v > 0 ? '+' : '');
+  return s + '$' + grp(Math.abs(v));
+}
+const pct = (r, d = 2, plus = true) => (r > 0 && plus ? '+' : r < 0 ? '−' : '') + grp(Math.abs(r * 100), d) + '%';
+const arrow = n => n > 0 ? '▲ ' : n < 0 ? '▼ ' : '';
+const cls = n => n > 0 ? 'up' : n < 0 ? 'down' : '';
+const sharesTxt = sh => { sh = Math.round(sh); const z = Math.floor(sh / 1000), r = sh % 1000; return grp(sh) + ' 股' + (z && sh >= 1000 ? '（' + (r ? (z + ' 張 ' + r + ' 股') : z + ' 張') + '）' : ''); };
+const prevWeekday = iso => { const d = new Date(iso); do { d.setDate(d.getDate() - 1); } while (d.getDay() === 0 || d.getDay() === 6); return d.toISOString().slice(0, 10); };
+const annualize = (r, days) => days >= 365 ? Math.sign(1 + r) * Math.pow(Math.abs(1 + r), 365 / days) - 1 : r;
+const ICON = {
+  home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+  book: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  bars: '<path d="M5 20v-8M10 20V6M15 20v-5M20 20V9"/>',
+  cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  back: '<path d="M15 18l-6-6 6-6"/>',
+  down: '<path d="M6 9l6 6 6-6"/>',
+  right: '<path d="M9 6l6 6-6 6"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeoff: '<path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.7 0 3.2-.5 4.5-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  sync: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>'
+};
+const ic = (name, sw = 1.8) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
+
+/* ================= data ================= */
+// 上市櫃股票、ETF 代號對照（Yahoo股市類股報價，2026 年 11 月版本）；每月 1 號的排程會把新掛牌與更名寫進資料庫 market/names
+const TW_NAMES = {"1101":"台泥","1102":"亞泥","1103":"嘉泥","1104":"環泥","1108":"幸福","1109":"信大","1110":"東泥","1201":"味全","1203":"味王","1210":"大成","1213":"大飲","1215":"卜蜂","1216":"統一","1217":"愛之味","1218":"泰山","1219":"福壽","1220":"台榮","1225":"福懋油","1227":"佳格","1229":"聯華","1231":"聯華食","1232":"大統益","1233":"天仁","1234":"黑松","1235":"興泰","1236":"宏亞","1256":"鮮活果汁-KY","1301":"台塑","1303":"南亞","1304":"台聚","1305":"華夏","1307":"三芳","1308":"亞聚","1309":"台達化","1310":"台苯","1312":"國喬","1313":"聯成","1314":"中石化","1315":"達新","1316":"上曜","1319":"東陽","1321":"大洋","1323":"永裕","1324":"地球","1325":"恆大","1326":"台化","1337":"再生-KY","1338":"廣華-KY","1339":"昭輝","1340":"勝悅-KY","1341":"富林-KY","1342":"八貫","1402":"遠東新","1409":"新纖","1410":"南染","1413":"宏洲","1414":"東和","1416":"廣豐","1417":"嘉裕","1418":"東華","1419":"新紡","1423":"利華","1432":"大魯閣","1434":"福懋","1435":"中福","1436":"華友聯","1437":"勤益控","1438":"三地開發","1439":"雋揚","1440":"南紡","1441":"大東","1442":"名軒","1443":"立益","1444":"力麗","1445":"大宇","1446":"宏和","1447":"力鵬","1449":"佳和","1451":"年興","1452":"宏益","1453":"大將","1454":"台富","1455":"集盛","1456":"怡華","1457":"宜進","1459":"聯發","1460":"宏遠","1463":"強盛新","1464":"得力","1465":"偉全","1466":"聚隆","1467":"南緯","1468":"昶和","1470":"大統新創","1471":"首利","1472":"三洋實業","1473":"台南","1474":"弘裕","1475":"業旺","1476":"儒鴻","1477":"聚陽","1503":"士電","1504":"東元","1506":"正道","1512":"瑞利","1513":"中興電","1514":"亞力","1515":"力山","1516":"川飛","1517":"利奇","1519":"華城","1521":"大億","1522":"堤維西","1524":"耿鼎","1525":"江申","1526":"日馳","1527":"鑽全","1528":"恩德","1529":"樂事綠能","1530":"亞崴","1531":"高林股","1532":"勤美","1533":"車王電","1535":"中宇","1536":"和大","1537":"廣隆","1538":"正峰","1539":"巨庭","1540":"喬福","1541":"錩泰","1558":"伸興","1560":"中砂","1563":"巧新","1568":"倉佑","1582":"信錦","1583":"程泰","1587":"吉茂","1589":"永冠-KY","1590":"亞德客-KY","1597":"直得","1598":"岱宇","1603":"華電","1604":"聲寶","1605":"華新","1608":"華榮","1609":"大亞","1611":"中電","1612":"宏泰","1614":"三洋電","1615":"大山","1616":"億泰","1617":"榮星","1618":"合機","1623":"大東電","1626":"艾美特-KY","1702":"南僑","1707":"葡萄王","1708":"東鹼","1709":"和益","1710":"東聯","1711":"永光","1712":"興農","1713":"國化","1714":"和桐","1717":"長興","1718":"中纖","1720":"生達","1721":"國慶科技","1722":"台肥","1723":"中碳","1725":"元禎","1726":"永記","1727":"中華化","1730":"花仙子","1731":"美吾華","1732":"毛寶","1733":"五鼎","1734":"杏輝","1735":"日勝化","1736":"喬山","1737":"臺鹽","1752":"南光","1760":"寶齡富錦","1762":"中化生","1773":"勝一","1776":"展宇","1783":"和康生","1786":"科妍","1789":"神隆","1795":"美時","1802":"台玻","1805":"寶徠","1806":"冠軍","1808":"潤隆","1809":"中釉","1810":"和成","1817":"凱撒衛","1903":"士紙","1904":"正隆","1905":"華紙","1906":"寶隆","1907":"永豐餘","1909":"榮成","2002":"中鋼","2006":"東和鋼鐵","2007":"燁興","2008":"高興昌","2009":"第一銅","2010":"春源","2012":"春雨","2013":"中鋼構","2014":"中鴻","2015":"豐興","2017":"官田鋼","2020":"美亞","2022":"聚亨","2023":"燁輝","2024":"志聯","2025":"千興","2027":"大成鋼","2028":"威致","2029":"盛餘","2030":"彰源","2031":"新光鋼","2032":"新鋼","2033":"佳大","2034":"允強","2038":"海光","2049":"上銀","2059":"川湖","2062":"橋椿","2069":"運錩","2072":"世紀能源","2101":"南港","2102":"泰豐","2103":"台橡","2104":"國際中橡","2105":"正新","2106":"建大","2107":"厚生","2108":"南帝","2109":"華豐","2114":"鑫永銓","2115":"六暉-KY","2201":"裕隆","2204":"中華","2206":"三陽工業","2207":"和泰車","2208":"台船","2211":"長榮鋼","2227":"裕日車","2228":"劍麟","2231":"為升","2233":"宇隆","2236":"百達-KY","2239":"英利-KY","2241":"艾姆勒","2243":"宏旭-KY","2247":"汎德永業","2248":"華勝-KY","2250":"IKKA-KY","2301":"光寶科","2302":"麗正","2303":"聯電","2305":"全友","2308":"台達電","2312":"金寶","2313":"華通","2314":"台揚","2316":"楠梓電","2317":"鴻海","2321":"東訊","2323":"中環","2324":"仁寶","2327":"國巨*","2328":"廣宇","2329":"華泰","2330":"台積電","2331":"精英","2332":"友訊","2337":"旺宏","2338":"光罩","2340":"台亞","2342":"茂矽","2344":"華邦電","2345":"智邦","2347":"聯強","2348":"海悅","2349":"錸德","2351":"順德","2352":"佳世達","2353":"宏碁","2354":"鴻準","2355":"敬鵬","2356":"英業達","2357":"華碩","2359":"所羅門","2360":"致茂","2362":"藍天","2363":"矽統","2364":"倫飛","2365":"昆盈","2367":"燿華","2368":"金像電","2369":"菱生","2371":"大同","2373":"震旦行","2374":"佳能","2375":"凱美","2376":"技嘉","2377":"微星","2379":"瑞昱","2380":"虹光","2382":"廣達","2383":"台光電","2385":"群光","2387":"精元","2388":"威盛","2390":"云辰","2392":"正崴","2393":"億光","2395":"研華","2397":"友通","2399":"映泰","2401":"凌陽","2402":"毅嘉","2404":"漢唐","2405":"輔信","2406":"國碩","2408":"南亞科","2409":"友達","2412":"中華電","2413":"環科","2414":"精技","2415":"錩新","2417":"圓剛","2419":"仲琦","2420":"新巨","2421":"建準","2423":"固緯","2424":"隴華","2425":"承啟","2426":"鼎元","2427":"三商電","2428":"興勤","2429":"銘旺科","2430":"燦坤","2431":"聯昌","2433":"互盛電","2434":"統懋","2436":"偉詮電","2438":"翔耀","2439":"美律","2440":"太空梭","2441":"超豐","2442":"新美齊","2444":"兆勁","2449":"京元電子","2450":"神腦","2451":"創見","2453":"凌群","2454":"聯發科","2455":"全新","2457":"飛宏","2458":"義隆","2459":"敦吉","2460":"建通","2461":"光群雷","2462":"良得電","2464":"盟立","2465":"麗臺","2466":"冠西電","2467":"志聖","2468":"華經","2471":"資通","2472":"立隆電","2474":"可成","2476":"鉅祥","2477":"美隆電","2478":"大毅","2480":"敦陽科","2481":"強茂","2482":"連宇","2483":"百容","2484":"希華","2485":"兆赫","2486":"一詮","2488":"漢平","2489":"瑞軒","2491":"吉祥全","2492":"華新科","2493":"揚博","2495":"普安","2496":"卓越","2497":"怡利電","2498":"宏達電","2501":"國建","2504":"國產","2505":"國揚","2506":"太設","2509":"全坤建","2511":"太子","2514":"龍邦","2515":"中工","2516":"新建","2520":"冠德","2524":"京城","2527":"宏璟","2528":"皇普","2530":"華建","2534":"宏盛","2535":"達欣工","2536":"宏普","2537":"聯上發","2538":"基泰","2539":"櫻花建","2540":"愛山林","2542":"興富發","2543":"皇昌","2545":"皇翔","2546":"根基","2547":"日勝生","2548":"華固","2597":"潤弘","2601":"益航","2603":"長榮","2605":"新興","2606":"裕民","2607":"榮運","2608":"嘉里大榮","2609":"陽明","2610":"華航","2611":"志信","2612":"中航","2613":"中櫃","2614":"東森","2615":"萬海","2616":"山隆","2617":"台航","2618":"長榮航","2630":"亞航","2633":"台灣高鐵","2634":"漢翔","2636":"台驊控股","2637":"慧洋-KY","2642":"宅配通","2645":"長榮航太","2646":"星宇航空","2701":"萬企","2702":"華園","2704":"國賓","2705":"六福","2706":"第一店","2707":"晶華","2712":"遠雄來","2722":"夏都","2723":"美食-KY","2727":"王品","2731":"雄獅","2739":"寒舍","2748":"雲品","2753":"八方雲集","2762":"世界健身-KY","2801":"彰銀","2812":"台中銀","2816":"旺旺保","2820":"華票","2832":"台產","2834":"臺企銀","2836":"高雄銀","2838":"聯邦銀","2845":"遠東銀","2849":"安泰銀","2850":"新產","2851":"中再保","2852":"第一保","2855":"統一證","2867":"三商壽","2880":"華南金","2881":"富邦金","2882":"國泰金","2883":"凱基金","2884":"玉山金","2885":"元大金","2886":"兆豐金","2887":"台新新光金","2889":"國票金","2890":"永豐金","2891":"中信金","2892":"第一金","2897":"王道銀行","2901":"欣欣","2903":"遠百","2904":"匯僑","2905":"三商","2906":"高林","2908":"特力","2910":"統領","2911":"麗嬰房","2912":"統一超","2913":"農林","2915":"潤泰全","2923":"鼎固-KY","2929":"淘帝-KY","2939":"永邑-KY","2945":"三商家購","3002":"歐格","3003":"健和興","3004":"豐達科","3005":"神基","3006":"晶豪科","3008":"大立光","3010":"華立","3011":"今皓","3013":"晟銘電","3014":"聯陽","3015":"全漢","3016":"嘉晶","3017":"奇鋐","3018":"隆銘綠能","3019":"亞光","3021":"鴻名","3022":"威強電","3023":"信邦","3024":"憶聲","3025":"星通","3026":"禾伸堂","3027":"盛達","3028":"增你強","3029":"零壹","3030":"德律","3031":"佰鴻","3032":"偉訓","3033":"威健","3034":"聯詠","3035":"智原","3036":"文曄","3037":"欣興","3038":"全台","3040":"遠見","3041":"揚智","3042":"晶技","3043":"科風","3044":"健鼎","3045":"台灣大","3046":"建碁","3047":"訊舟","3048":"益登","3049":"精金","3050":"鈺德","3051":"力特","3052":"夆典","3054":"立萬利","3055":"蔚華科","3056":"富華新","3057":"喬鼎","3058":"立德","3059":"華晶科","3060":"銘異","3062":"建漢","3090":"日電貿","3092":"鴻碩","3094":"聯傑","3130":"一零四","3135":"凌航","3138":"耀登","3149":"正達","3164":"景岳","3167":"大量","3168":"眾福科","3189":"景碩","3209":"全科","3229":"晟鈦","3231":"緯創","3257":"虹冠電","3266":"昇陽","3296":"勝德","3305":"昇貿","3308":"聯德","3311":"閎暉","3312":"弘憶股","3321":"同泰","3338":"泰碩","3346":"麗清","3356":"奇偶","3376":"新日興","3380":"明泰","3406":"玉晶光","3413":"京鼎","3416":"融程電","3419":"譁裕","3432":"台端","3437":"榮創","3443":"創意","3447":"展達","3450":"聯鈞","3481":"群創","3494":"誠研","3501":"維熹","3504":"揚明光","3515":"華擎","3518":"柏騰","3528":"安馳","3530":"晶相光","3532":"台勝科","3533":"嘉澤","3535":"晶彩科","3543":"州巧","3545":"敦泰","3550":"聯穎","3557":"嘉威","3563":"牧德","3576":"聯合再生","3583":"辛耘","3588":"通嘉","3591":"艾笛森","3592":"瑞鼎","3593":"力銘","3596":"智易","3605":"宏致","3607":"谷崧","3617":"碩天","3622":"洋華","3645":"達邁","3652":"精聯","3653":"健策","3661":"世芯-KY","3665":"貿聯-KY","3669":"圓展","3673":"TPK-KY","3679":"新至陞","3686":"達能","3694":"海華","3701":"大眾控","3702":"大聯大","3703":"欣陸","3704":"合勤控","3705":"永信","3706":"神達","3708":"上緯投控","3711":"日月光投控","3712":"永崴投控","3714":"富采","3715":"定穎投控","3716":"中化控股","3717":"聯嘉投控","4104":"佳醫","4106":"雃博","4108":"懷特","4119":"旭富","4133":"亞諾法","4137":"麗豐-KY","4142":"國光生","4148":"全宇生技-KY","4155":"訊映","4164":"承業醫","4190":"佐登-KY","4306":"炎洲","4414":"如興","4426":"利勤","4438":"廣越","4439":"冠星-KY","4440":"宜新實業","4441":"振大環球","4526":"東台","4532":"瑞智","4536":"拓凱","4540":"全球傳動","4545":"銘鈺","4551":"智伸科","4552":"力達-KY","4555":"氣立","4557":"永新-KY","4560":"強信-KY","4562":"穎漢","4564":"元翎","4566":"時碩工業","4569":"六方科-KY","4571":"鈞興-KY","4572":"駐龍","4576":"大銀微系統","4581":"光隆精密-KY","4583":"台灣精銳","4585":"達明","4588":"玖鼎電力","4720":"德淵","4722":"國精化","4736":"泰博","4737":"華廣","4739":"康普","4746":"台耀","4755":"三福化","4763":"材料*-KY","4764":"雙鍵","4766":"南寶","4770":"上品","4771":"望隼","4807":"日成-KY","4904":"遠傳","4906":"正文","4912":"聯德控股-KY","4915":"致伸","4916":"事欣科","4919":"新唐","4927":"泰鼎-KY","4930":"燦星網","4934":"太極","4935":"茂林-KY","4938":"和碩","4942":"嘉彰","4943":"康控-KY","4949":"有成精密","4952":"凌通","4956":"光鋐","4958":"臻鼎-KY","4960":"誠美材","4961":"天鈺","4967":"十銓","4968":"立積","4976":"佳凌","4977":"眾達-KY","4989":"榮科","4994":"傳奇","4999":"鑫禾","5007":"三星","5203":"訊連","5215":"科嘉-KY","5222":"全訊","5225":"東科-KY","5234":"達興材料","5243":"乙盛-KY","5244":"弘凱","5258":"虹堡","5269":"祥碩","5283":"禾聯碩","5284":"jpp-KY","5285":"界霖","5288":"豐祥-KY","5292":"華懋","5306":"桂盟","5388":"中磊","5434":"崇越","5469":"瀚宇博","5471":"松翰","5484":"慧友","5515":"建國","5519":"隆大","5521":"工信","5522":"遠雄","5525":"順天","5531":"鄉林","5533":"皇鼎","5534":"長虹","5538":"東明-KY","5546":"永固-KY","5607":"遠雄港","5608":"四維航","5706":"鳳凰","5871":"中租-KY","5876":"上海商銀","5880":"合庫金","5906":"台南-KY","5907":"大洋-KY","6005":"群益證","6024":"群益期","6108":"競國","6112":"邁達特","6115":"鎰勝","6116":"彩晶","6117":"迎廣","6120":"達運","6128":"上福","6133":"金橋","6136":"富爾特","6139":"亞翔","6141":"柏承","6142":"友勁","6152":"百一","6153":"嘉聯益","6155":"鈞寶","6164":"華興","6165":"浪凡","6166":"凌華","6168":"宏齊","6176":"瑞儀","6177":"達麗","6183":"關貿","6184":"大豐電","6189":"豐藝","6191":"精成科","6192":"巨路","6196":"帆宣","6197":"佳必琪","6201":"亞弘電","6202":"盛群","6205":"詮欣","6206":"飛捷","6209":"今國光","6213":"聯茂","6214":"精誠","6215":"和椿","6216":"居易","6224":"聚鼎","6225":"天瀚","6226":"光鼎","6230":"尼得科超眾","6235":"華孚","6239":"力成","6243":"迅杰","6257":"矽格","6269":"台郡","6271":"同欣電","6272":"驊陞","6277":"宏正","6278":"台表科","6281":"全國電","6282":"康舒","6283":"淳安","6285":"啟碁","6405":"悅城","6409":"旭隼","6412":"群電","6414":"樺漢","6415":"矽力*-KY","6416":"瑞祺電通","6426":"統新","6431":"光麗-KY","6438":"迅得","6442":"光聖","6443":"元晶","6446":"藥華藥","6449":"鈺邦","6451":"訊芯-KY","6456":"GIS-KY","6464":"台數科","6472":"保瑞","6477":"安集","6491":"晶碩","6504":"南六","6505":"台塑化","6515":"穎崴","6525":"捷敏-KY","6526":"達發","6531":"愛普*","6533":"晶心科","6541":"泰福-KY","6550":"北極星藥業-KY","6552":"易華電","6558":"興能高","6573":"虹揚-KY","6579":"研揚","6581":"鋼聯","6582":"申豐","6585":"鼎基","6589":"台康生技","6591":"動力-KY","6592":"和潤企業","6598":"ABC-KY","6605":"帝寶","6606":"建德工業","6614":"資拓宏宇","6625":"必應","6641":"基士德-KY","6655":"科定","6657":"華安","6658":"聯策","6666":"羅麗芬-KY","6668":"中揚光","6669":"緯穎","6670":"復盛應用","6671":"三能-KY","6672":"騰輝電子-KY","6674":"鋐寶科技","6689":"伊雲谷","6691":"洋基工程","6695":"芯鼎","6698":"旭暉應材","6706":"惠特","6715":"嘉基","6719":"力智","6722":"輝創","6742":"澤米","6743":"安普新","6753":"龍德造船","6754":"匯僑設計","6756":"威鋒電子","6757":"台灣虎航","6768":"志強-KY","6770":"力積電","6776":"展碁國際","6781":"AES-KY","6782":"視陽","6789":"采鈺","6790":"永豐實","6792":"詠業","6794":"向榮生技","6796":"晉弘","6799":"來頡","6805":"富世達","6806":"森崴能源","6807":"峰源-KY","6830":"汎銓","6831":"邁科","6834":"天二科技","6835":"圓裕","6838":"台新藥","6861":"睿生光電","6862":"三集瑞-KY","6863":"永道-KY","6869":"雲豹能源","6873":"泓德能源","6885":"全福生技","6887":"寶綠特-KY","6890":"來億-KY","6901":"鑽石投資","6902":"GOGOLOOK","6906":"現觀科","6909":"創控","6914":"阜爾運通","6916":"華凌","6918":"愛派司","6919":"康霈*","6923":"中台","6928":"攸泰科技","6931":"青松健康","6933":"AMAX-KY","6934":"心誠鎂","6936":"永鴻生技","6937":"天虹","6944":"兆聯實業","6952":"大武山","6957":"裕慶-KY","6958":"日盛台駿","6962":"奕力-KY","6965":"中傑-KY","6994":"富威電力","7705":"三商餐飲","7711":"永擎","7721":"微程式","7722":"LINEPAY","7732":"金興精密","7736":"虎山","7749":"意騰-KY","7750":"新代","7765":"中華資安","7769":"鴻勁","7780":"大研生醫*","7786":"東方風能","7788":"松川精密","7791":"皇家可口","7795":"長廣","7799":"禾榮科","8011":"台通","8016":"矽創","8021":"尖點","8028":"昇陽半導體","8033":"雷虎","8039":"台虹","8045":"達運光電","8046":"南電","8070":"長華*","8072":"陞泰","8081":"致新","8101":"華冠","8103":"瀚荃","8104":"錸寶","8105":"凌巨","8110":"華東","8112":"至上","8114":"振樺電","8131":"福懋科","8150":"南茂","8163":"達方","8201":"無敵","8210":"勤誠","8213":"志超","8215":"明基材","8222":"寶一","8249":"菱光","8261":"富鼎","8271":"宇瞻","8341":"日友","8367":"建新國際","8374":"羅昇","8404":"百和興業-KY","8411":"福貞-KY","8422":"可寧衛*","8429":"金麗-KY","8438":"昶昕","8442":"威宏-KY","8443":"阿瘦","8454":"富邦媒","8462":"柏文","8463":"潤泰材","8464":"億豐","8466":"美吉吉-KY","8467":"波力-KY","8473":"山林水","8476":"台境*","8478":"東哥遊艇","8481":"政伸","8482":"商億-KY","8488":"吉源-KY","8499":"鼎炫-KY","8926":"台汽電","8940":"新天地","8996":"高力","9802":"鈺齊-KY","9902":"台火","9904":"寶成","9905":"大華","9906":"欣巴巴","9907":"統一實","9908":"大台北","9910":"豐泰","9911":"櫻花","9912":"偉聯","9914":"美利達","9917":"中保科","9918":"欣天然","9919":"康那香","9921":"巨大","9924":"福興","9925":"新保","9926":"新海","9927":"泰銘","9928":"中視","9929":"秋雨","9930":"中聯資源","9931":"欣高","9933":"中鼎","9934":"成霖","9935":"慶豐富","9937":"全國","9938":"百和","9939":"宏全","9940":"信義","9941":"裕融","9942":"茂順","9943":"好樂迪","9944":"新麗","9945":"潤泰新","9946":"三發地產","9955":"佳龍","9958":"世紀鋼","1101B":"台泥乙特","1312A":"國喬特","1522A":"堤維西甲特","2002A":"中鋼特","2348A":"海悅甲特","2836A":"高雄銀甲特","2838A":"聯邦銀甲特","2881A":"富邦特","2881B":"富邦金乙特","2881C":"富邦金丙特","2882A":"國泰特","2882B":"國泰金乙特","2883B":"凱基金乙特","2887E":"台新新光戊特一","2887F":"台新新光戊特二","2887G":"台新新光庚特一","2887H":"台新新光庚特二","2887I":"台新新光辛特","2887Z1":"台新新光己特","2891B":"中信金乙特","2891C":"中信金丙特","2897B":"王道銀乙特","5871A":"中租-KY甲特","6592A":"和潤企業甲特","6592B":"和潤企業乙特","6958A":"日盛台駿甲特","8112A":"至上甲特","9941A":"裕融甲特","2254":"巨鎧精密-創","2258":"鴻華先進-創","2432":"倚天酷碁-創","3150":"鈺寶-創","4590":"富田-創","6534":"正瀚-創","6645":"金萬林-創","6771":"平和環保-創","6854":"錼創科技-KY創","6908":"宏碁遊戲-創","6921":"嘉雨思-創","6924":"榮惠-KY創","6949":"沛爾生醫-創","6951":"青新-創","6955":"邦睿生技-創","6969":"成信實業*-創","6988":"威力暘-創","7610":"聯友金屬-創","7631":"聚賢研發-創","7730":"暉盛-創","7740":"熙特爾-創","7823":"奧義賽博-KY創","8162":"微矽電子-創","8487":"愛爾達-創","0050":"元大台灣50","0051":"元大中型100","0052":"富邦科技","0053":"元大科技市值","0055":"元大MSCI金融","0056":"元大高股息","0057":"富邦摩台","0061":"元大寶滬深","006203":"元大MSCI台灣","006204":"永豐臺灣加權","006205":"富邦上証","006206":"元大上證50","006207":"復華滬深","006208":"富邦台50","00625K":"富邦上証+R","00631L":"元大台灣50正2","00632R":"元大台灣50反1","00633L":"富邦上証正2","00634R":"富邦上証反1","00635U":"期元大S&P黃金","00636":"國泰中國A50","00636K":"國泰中國A50+U","00637L":"元大滬深300正2","00638R":"元大滬深300反1","00639":"富邦深100","00640L":"富邦日本正2","00641R":"富邦日本反1","00642U":"期元大S&P石油","00643":"群益深証中小","00643K":"群益深証中小+R","00645":"富邦日本","00646":"元大S&P500","00647L":"元大S&P500正2","00648R":"元大S&P500反1","00650L":"復華香港正2","00651R":"復華香港反1","00652":"富邦印度","00653L":"富邦印度正2","00654R":"富邦印度反1","00655L":"國泰中國A50正2","00656R":"國泰中國A50反1","00657":"國泰日經225","00657K":"國泰日經225+U","00660":"元大歐洲50","00661":"元大日經225","00662":"富邦NASDAQ","00663L":"國泰臺灣加權正2","00664R":"國泰臺灣加權反1","00665L":"富邦恒生國企正2","00666R":"富邦恒生國企反1","00668":"國泰美國道瓊","00668K":"國泰美國道瓊+U","00669R":"國泰美國道瓊反1","00670L":"富邦NASDAQ正2","00671R":"富邦NASDAQ反1","00673R":"期元大S&P原油反1","00674R":"期元大S&P黃金反1","00675L":"富邦臺灣加權正2","00676R":"富邦臺灣加權反1","00678":"群益那斯達克生技","00680L":"元大美債20正2","00681R":"元大美債20反1","00682U":"期元大美元指數","00683L":"期元大美元指正2","00684R":"期元大美元指反1","00685L":"群益臺灣加權正2","00686R":"群益臺灣加權反1","00688L":"國泰20年美債正2","00689R":"國泰20年美債反1","00690":"兆豐藍籌30","00692":"富邦公司治理","00693U":"期街口S&P黃豆","00700":"富邦恒生國企","00701":"國泰股利精選30","00702":"國泰標普低波高息","00703":"台新MSCI中國","00706L":"期元大S&P日圓正2","00707R":"期元大S&P日圓反1","00708L":"期元大S&P黃金正2","00709":"富邦歐洲","00710B":"復華彭博非投等債","00711B":"復華彭博新興債","00712":"復華富時不動產","00713":"元大台灣高息低波","00714":"群益道瓊美國地產","00715L":"期街口布蘭特正2","00717":"富邦美國特別股","00728":"第一金工業30","00730":"富邦臺灣優質高息","00731":"復華富時高息低波","00733":"富邦臺灣中小","00735":"國泰臺韓科技","00736":"國泰新興市場","00737":"國泰AI機器人","00738U":"期元大道瓊白銀","00739":"元大MSCIA股","00752":"中信中國50","00753L":"中信中國50正2","00757":"統一FANG+","00762":"元大全球AI","00763U":"期街口道瓊銅","00770":"國泰北美科技","00771":"元大US高息特別股","00775B":"台新投等債15+","00783":"富邦中証500","00830":"國泰費城半導體","00850":"元大臺灣ESG永續","00851":"台新全球AI","00852L":"國泰美國道瓊正2","00861":"元大全球未來通訊","00865B":"國泰US短期公債","00875":"國泰網路資安","00876":"元大全球5G","00878":"國泰永續高股息","00881":"國泰台灣科技龍頭","00882":"中信中國高股息","00885":"富邦越南","00891":"中信關鍵半導體","00892":"富邦台灣半導體","00893":"國泰智能電動車","00894":"中信小資高價30","00895":"富邦未來車","00896":"中信綠能及電動車","00897":"富邦基因免疫生技","00898":"國泰基因免疫革命","00899":"FT潔淨能源","00900":"富邦特選高股息30","00901":"永豐智能車供應鏈","00902":"中信電池及儲能","00903":"富邦元宇宙","00904":"台新臺灣半導體30","00905":"FT臺灣Smart","00907":"永豐優息存股","00908":"富邦入息REITs+","00909":"國泰數位支付服務","00910":"第一金太空衛星","00911":"兆豐洲際半導體","00912":"中信臺灣智慧50","00913":"兆豐台灣晶圓製造","00915":"凱基優選高股息30","00916":"國泰全球品牌50","00917":"中信特選金融","00918":"大華優利高填息30","00919":"群益台灣精選高息","00920":"富邦ESG綠色電力","00921":"兆豐龍頭等權重","00922":"國泰台灣領袖50","00923":"群益台ESG低碳50","00924":"復華S&P500成長","00926":"凱基全球菁英55","00927":"群益半導體收益","00929":"復華台灣科技優息","00930":"永豐ESG低碳高息","00932":"兆豐永續高息等權","00934":"中信成長高股息","00935":"野村臺灣新科技50","00936":"台新永續高息中小","00938":"凱基優選30","00939":"統一台灣高息動能","00940":"元大台灣價值高息","00941":"中信上游半導體","00943":"兆豐電子高息等權","00944":"野村趨勢動能高息","00945B":"凱基美國非投等債","00946":"群益科技高息成長","00947":"台新臺灣IC設計","00949":"復華日本龍頭","00951":"台新日本半導體","00952":"凱基台灣AI50","00953B":"群益優選非投等債","00954":"中信日本半導體","00956":"中信日經高股息","00960":"野村全球航運龍頭","00961":"FT臺灣永續高息","00962":"台新AI優息動能","00963":"中信全球高股息","00964":"中信亞太高股息","00965":"元大航太防衛科技","00971":"野村美國研發龍頭","00972":"野村日本動能高息","009800":"中信NASDAQ","009801":"中信美國創新科技","009802":"富邦旗艦50","009803":"玉山市值動能50","009804":"聯邦台精彩50","009805":"台新美國電力基建","009808":"華南永昌優選50","009809":"富邦淨零ESG50","00980A":"主動野村臺灣優選","009810":"玉山全球藍籌100","009811":"統一美國50","009812":"野村日本東證","009813":"貝萊德標普卓越50","009816":"凱基台灣TOP50","009817":"國泰日本不動產","009818":"華南永昌NASDAQxT","00981A":"主動統一台股增長","00981T":"平衡凱基雙核收息","00982A":"主動群益台灣強棒","00982D":"主動富邦動態入息","00982T":"平衡兆豐台美動能","00983A":"主動中信ARK創新","00983D":"主動富邦複合收益","00984A":"主動安聯台灣高息","00984D":"主動聯博全球非投","00985A":"主動野村台灣50","00985B":"群益ESG投等債0-5","00986A":"主動台新龍頭成長","00987A":"主動台新優勢成長","00988A":"主動統一全球創新","00989A":"主動摩根美國科技","00990A":"主動元大AI新經濟","00991A":"主動復華未來50","00992A":"主動群益科技創新","00993A":"主動安聯台灣","00994A":"主動第一金台股優","00995A":"主動中信台灣卓越","00996A":"主動兆豐台灣豐收","020000":"富邦特選蘋果N","020011":"統一微波高息20N","020012":"富邦行動通訊N","02001L":"富邦蘋果正二N","02001R":"富邦蘋果反一N","020020":"元大台股領航N","020028":"元大特選電動車N","020029":"元大ESG高股息N","020030":"統一智慧電動車N","020031":"統一IC設計臺灣N","020032":"元大綠能N","020034":"元大IC設計N","020036":"元大金融配息N","020037":"元大金融高股息N","020038":"元大ESG配息N","020039":"元大加權N","9103":"美德醫療-DR","910322":"康師傅-DR","9105":"泰金寶-DR","910861":"神州-DR","9110":"越南控-DR","911608":"明輝-DR","911622":"泰聚亨-DR","911868":"同方友友-DR","912000":"晨訊科-DR","9136":"巨騰-DR","01001T":"土銀富邦R1","01002T":"土銀國泰R1","01004T":"土銀富邦R2","01007T":"兆豐國泰R2","01009T":"王道圓滿R1","01010T":"京城樂富R1","006201":"元大富櫃50","00679B":"元大美債20年","00687B":"國泰20年美債","00687C":"國泰20年美債+櫃U","00694B":"富邦美債1-3","00695B":"富邦美債7-10","00696B":"富邦美債20年","00697B":"元大美債7-10","00719B":"元大美債1-3","00720B":"元大投資級公司債","00722B":"群益投資級電信債","00723B":"群益投資級科技債","00724B":"群益投資級金融債","00725B":"國泰投資級公司債","00726B":"國泰新興投等債","00727B":"國泰優選非投等債","00734B":"台新JPM新興債","00740B":"富邦全球投等債","00741B":"富邦全球非投等債","00746B":"富邦A級公司債","00749B":"凱基新興債10+","00750B":"凱基科技債10+","00751B":"元大AAA至A公司債","00754B":"群益AAA-AA公司債","00755B":"群益投資級公用債","00756B":"群益投等新興公債","00758B":"復華能源債","00759B":"復華製藥債","00760B":"復華新興企業債","00761B":"國泰A級公司債","00764B":"群益25年美債","00768B":"復華20年美債","00772B":"中信高評級公司債","00773B":"中信優先金融債","00777B":"凱基AAA至A公司債","00778B":"凱基金融債20+","00779B":"凱基美債25+","00780B":"國泰A級金融債","00781B":"國泰A級科技債","00782B":"國泰A級公用債","00785B":"富邦金融投等債","00786B":"元大10年IG銀行債","00787B":"元大10年IG醫療債","00788B":"元大10年IG電能債","00789B":"復華公司債A3","00791B":"復華信用債1-5","00792B":"群益A級公司債","00793B":"群益AAA-A醫療債","00795B":"中信美國公債20年","00799B":"國泰A級醫療債","00834B":"第一金金融債10+","00836B":"永豐10年A公司債","00838B":"永豐7-10年中國債","00840B":"凱基IG精選15+","00841B":"凱基AAA-AA公司債","00842B":"台新美元銀行債","00844B":"台新15年IG金融債","00845B":"富邦新興投等債","00846B":"富邦歐洲銀行債","00847B":"中信美國市政債","00848B":"中信新興亞洲債","00849B":"中信EM主權債0-5","00853B":"統一美債10年Aa-A","00856B":"永豐1-3年美公債","00857B":"永豐20年美公債","00858":"永豐美國500大","00859B":"群益0-1年美債","00860B":"群益1-5Y投資級債","00862B":"中信投資級公司債","00863B":"中信全球電信債","00864B":"中信美國公債0-1","00867B":"台新A-BBB電信債","00870B":"元大15年EM主權債","00877":"復華中國5G","00883B":"中信ESG投資級債","00884B":"中信低碳新興債","00886":"永豐美國科技","00887":"永豐中國科技50大","00888":"永豐台灣ESG","00890B":"凱基ESGBBB債15+","00928":"中信上櫃ESG30","00931B":"統一美債20年","00933B":"國泰10Y+金融債","00937B":"群益ESG投等債20+","00942B":"台新美A公司債20+","00948B":"中信優息投資級債","00950B":"凱基A級公司債","00955":"中信日本商社","00957B":"兆豐US優選投等債","00958B":"永豐ESG銀行債15+","00959B":"大華投等美債15Y+","00966B":"統一ESG投等債15+","00967B":"元大優息美債","00968B":"元大優息投等債","00969B":"元大零息超長美債","00970B":"台新BBB投等債20+","009806":"台新標普500","009807":"台新標普科技精選","00980B":"台新特選IG債10+","00980D":"主動聯博投等入息","00980T":"平衡凱基美國TOP","009814":"富邦標普500","009815":"大華美國MAG7+","00981B":"第一金優選非投債","00981D":"主動中信非投等債","00982B":"FT投資級債20+","00983B":"大華優利美公債20","00984B":"大華優利美A債15","00985D":"主動貝萊德優投等","00986B":"FT金融債10+","00987B":"野村10+澳洲公債","00988B":"玉山嚴選非投債","00989B":"台新美國非投等債","020001":"富邦存股雙十N","020025":"統一亞洲半導體N","020027":"元大上櫃ESG成長N","020033":"統一恒生科期N","020035":"元大上櫃ESG高息N","020040":"元大上櫃ESG龍頭N","020041":"兆豐半導體氣候N","1240":"茂生農經","1259":"安心","1264":"德麥","1268":"漢來美食","1294":"漢田生技","1295":"生合","1336":"台翰","1565":"精華","1569":"濱川","1570":"力肯","1580":"新麥","1584":"精剛","1586":"和勤","1591":"駿吉-KY","1593":"祺驊","1595":"川寶","1599":"宏佳騰","1742":"台蠟","1777":"生泰","1781":"合世","1784":"訊聯","1785":"光洋科","1788":"杏昌","1796":"金穎生技","1799":"易威","1813":"寶利徠","1815":"富喬","2035":"唐榮","2061":"風青","2063":"世鎧","2064":"晉椿","2065":"世豐","2066":"世德","2067":"嘉鋼","2070":"精湛","2073":"雄順","2221":"大甲","2230":"泰茂","2235":"謚源","2596":"綠意","2640":"大車隊","2641":"正德","2643":"捷迅","2718":"全心投控","2719":"燦星旅","2724":"藝舍-KY","2726":"雅茗-KY","2729":"瓦城","2732":"六角","2734":"易飛網","2736":"富野","2740":"華軒","2743":"山富","2745":"五福","2751":"王座","2752":"豆府","2754":"亞洲藏壽司","2755":"揚秦","2756":"聯發國際","2916":"滿心","2924":"宏太-KY","2926":"誠品生活","2937":"集雅社","2941":"米斯特","2947":"振宇五金","2948":"寶陞","2949":"欣新網","3064":"泰偉","3066":"李洲","3067":"全域","3071":"協禧","3073":"天方能源","3078":"僑威","3081":"聯亞","3083":"網龍","3085":"新零售","3086":"華義","3088":"艾訊","3093":"港建*","3095":"及成","3105":"穩懋","3114":"好德","3115":"富榮綱","3118":"進階","3122":"笙泉","3128":"昇銳","3131":"弘塑","3141":"晶宏","3147":"大綜","3152":"璟德","3158":"嘉實","3162":"精確","3163":"波若威","3169":"亞信","3171":"炎洲流通","3176":"基亞","3178":"公準","3188":"鑫龍騰","3191":"雲嘉南","3205":"佰研","3206":"志豐","3207":"耀勝","3211":"順達","3213":"茂訊","3217":"優群","3218":"大學光","3219":"倚強科","3221":"台嘉碩","3224":"三顧","3226":"龍鋒","3227":"原相","3228":"金麗科","3230":"錦明","3232":"昱捷","3234":"光環","3236":"千如","3252":"海灣","3259":"鑫創","3260":"威剛","3264":"欣銓","3265":"台星科","3268":"海德威","3272":"東碩","3276":"宇環","3284":"太普高","3285":"微端","3287":"廣寰科","3288":"點晶","3289":"宜特","3290":"東浦","3293":"鈊象","3294":"英濟","3297":"杭特","3303":"岱稜","3306":"鼎天","3310":"佳穎","3313":"斐成","3317":"尼克森","3322":"建舜電","3323":"加百裕","3324":"雙鴻","3325":"旭品","3332":"幸康","3339":"泰谷","3349":"寶德","3354":"律勝","3357":"臺慶科","3360":"尚立","3362":"先進光","3363":"上詮","3372":"典範","3373":"熱映","3374":"精材","3379":"彬台","3388":"崇越電","3390":"旭軟","3402":"漢科","3426":"台興","3430":"奇鈦科","3434":"哲固","3438":"類比科","3441":"聯一光","3444":"利機","3455":"由田","3465":"進泰電子","3466":"德晉","3467":"台灣精材","3479":"安勤","3483":"力致","3484":"崧騰","3489":"森寶","3490":"單井","3491":"昇達科","3492":"長盛","3498":"陽程","3499":"環天科","3508":"位速","3511":"矽瑪","3512":"皇龍","3516":"亞帝歐","3520":"華盈","3521":"台鋼建設","3522":"御嵿","3523":"迎輝","3526":"凡甲","3527":"聚積","3529":"力旺","3531":"先益","3537":"堡達","3540":"曜越","3541":"西柏","3546":"宇峻","3548":"兆利","3551":"世禾","3552":"同致","3555":"博士旺","3556":"禾瑞亞","3558":"神準","3564":"其陽","3567":"逸昌","3570":"大塚","3577":"泓格","3580":"友威科","3581":"博磊","3587":"閎康","3594":"磐儀","3597":"映興","3609":"三一東林","3611":"鼎翰","3615":"安可","3623":"富晶通","3624":"光頡","3625":"西勝","3628":"盈正","3629":"地心引力","3630":"新鉅科","3631":"晟楠","3632":"研勤","3646":"艾恩特","3663":"鑫科","3664":"安瑞-KY","3666":"光耀","3672":"康聯訊","3675":"德微","3680":"家登","3684":"榮昌","3685":"元創精密","3687":"歐買尬","3689":"湧德","3691":"碩禾","3693":"營邦","3707":"漢磊","3709":"鑫聯大投控","3710":"連展投控","3713":"新晶投控","4102":"永日","4105":"東洋","4107":"邦特","4109":"加捷生醫","4111":"濟生","4113":"聯上","4114":"健喬","4116":"明基醫","4120":"友華","4121":"優盛","4123":"晟德","4126":"太醫","4127":"天良","4128":"中天","4129":"聯合","4130":"健亞","4131":"浩泰","4138":"曜亞","4139":"馬光-KY","4147":"中裕","4153":"鈺緯","4154":"樂威科-KY","4157":"太景*-KY","4160":"訊聯基因","4161":"聿新科","4162":"智擎","4163":"鐿鈦","4166":"友霖","4167":"松瑞藥","4168":"醣聯","4171":"瑞基","4173":"久裕","4174":"浩鼎","4175":"杏一","4183":"福永生技","4188":"安克","4192":"杏國","4198":"欣大健康","4205":"中華食","4207":"環泰","4303":"信立","4304":"勝昱","4305":"世坤","4401":"東隆興","4402":"郡都開發","4406":"新昕纖","4413":"飛寶企業","4416":"三圓","4417":"金洲","4419":"皇家美食","4420":"光明","4430":"耀億","4432":"銘旺實","4433":"興采","4442":"竣邦-KY","4502":"健信","4503":"金雨","4506":"崇友","4510":"高鋒","4513":"福裕","4523":"永彰","4527":"方土霖","4528":"江興鍛","4529":"淳紳","4530":"天意","4533":"協易機","4534":"慶騰","4535":"至興","4538":"大詠城","4541":"晟田","4542":"科嶠","4543":"萬在","4549":"桓達","4550":"長佳","4554":"橙的","4556":"旭然","4558":"寶緯","4561":"健椿","4563":"百德","4568":"科際精密","4577":"達航科技","4580":"捷流閥業","4584":"君帆","4609":"唐鋒","4702":"中美實","4706":"大恭","4707":"磐亞","4711":"永純","4714":"永捷","4716":"大立","4721":"美琪瑪","4726":"永昕","4728":"雙美","4729":"熒茂","4735":"豪展","4741":"泓瀚","4743":"合一","4744":"皇將","4745":"合富-KY","4747":"強生","4749":"新應材","4754":"國碳科","4760":"勤凱","4767":"誠泰科技","4768":"晶呈科技","4772":"台特化","4804":"大略-KY","4806":"桂田文創","4903":"聯光通","4905":"台聯電","4907":"富宇","4908":"前鼎","4909":"新復興","4911":"德英","4923":"力士","4924":"欣厚-KY","4931":"新盛力","4933":"友輝","4939":"亞電","4946":"辣椒","4950":"金耘國際","4951":"精拓科","4953":"緯致","4966":"譜瑞-KY","4971":"IET-KY","4972":"湯石照明","4973":"廣穎","4974":"亞泰","4979":"華星光","4987":"科誠","4991":"環宇-KY","4995":"晶達","5009":"榮剛","5011":"久陽","5013":"強新","5014":"建錩","5015":"華祺","5016":"松和","5201":"凱衛","5202":"力新","5205":"中茂","5206":"坤悅","5209":"新鼎","5210":"寶碩","5211":"蒙恬","5212":"凌網","5213":"亞昕","5220":"萬達光電","5223":"安力-KY","5227":"立凱-KY","5228":"鈺鎧","5230":"雷笛克光學","5236":"凌陽創新","5245":"智晶","5251":"天鉞電","5263":"智崴","5272":"笙科","5274":"信驊","5276":"達輝-KY","5278":"尚凡*","5287":"數字","5289":"宜鼎","5291":"邑昇","5299":"杰力","5301":"寶得利","5302":"太欣","5309":"系統電","5310":"天剛","5312":"寶島科","5314":"世紀*","5315":"光聯","5321":"美而快","5324":"士開","5328":"華容","5340":"建榮","5344":"立衛","5345":"馥鴻","5347":"世界","5348":"正能量智能","5351":"鈺創","5353":"台林","5355":"佳總","5356":"協益","5364":"力麗店","5371":"中光電","5381":"光譜","5386":"青雲","5392":"能率","5398":"慕康生醫","5403":"中菲","5410":"國眾","5425":"台半","5426":"振發","5432":"新門","5438":"東友","5439":"高技","5443":"均豪","5450":"南良","5452":"佶優","5455":"昇益","5457":"宣德","5460":"同協","5464":"霖宏","5465":"富驊","5468":"凱鈺","5474":"聰泰","5475":"德宏","5478":"智冠","5481":"新華","5483":"中美晶","5487":"通泰","5488":"松普","5489":"彩富","5490":"同亨","5493":"三聯","5498":"凱崴","5508":"永信建","5511":"德昌","5512":"力麒","5514":"三豐","5516":"雙喜","5520":"力泰","5523":"豐謙","5529":"鉅陞","5530":"龍巖","5536":"聖暉*","5543":"桓鼎-KY","5547":"久舜","5548":"安倉","5601":"台聯櫃","5603":"陸海","5604":"中連","5609":"中菲行","5701":"劍湖山","5703":"亞都","5704":"老爺知","5864":"致和證","5878":"台名","5902":"德記","5903":"全家","5904":"寶雅","5905":"南仁湖","6015":"宏遠證","6016":"康和證","6020":"大展證","6021":"美好證","6023":"元大期","6026":"福邦證","6101":"寬魚國際","6103":"合邦","6104":"創惟","6109":"亞元","6111":"光聚晶電","6113":"亞矽","6114":"久威","6118":"建達","6121":"新普","6122":"擎邦","6123":"上奇","6124":"業強","6125":"廣運","6126":"信音","6127":"九豪","6129":"普誠","6130":"上亞科技","6134":"萬旭","6138":"茂達","6140":"訊達","6143":"振曜","6144":"得利影","6146":"耕興","6147":"頎邦","6148":"驊宏資","6150":"撼訊","6151":"晉倫","6154":"順發","6156":"松上","6158":"禾昌","6160":"欣技","6161":"捷波","6163":"華電網","6167":"久正","6169":"昱泉","6170":"統振","6171":"大城地產","6173":"信昌電","6174":"安碁","6175":"立敦","6179":"亞通","6180":"橘子","6182":"合晶","6185":"幃翔","6186":"新潤","6187":"萬潤","6188":"廣明","6190":"萬泰科","6194":"育富","6195":"詩肯","6198":"瑞築","6199":"天品","6203":"海韻電","6204":"艾華","6207":"雷科","6208":"日揚","6210":"慶生","6212":"理銘","6217":"中探針","6218":"豪勉","6219":"富旺","6220":"岳豐","6221":"晉泰","6222":"立軒","6223":"旺矽","6227":"茂綸","6228":"全譜","6229":"研通","6231":"系微","6233":"旺玖","6234":"高僑","6236":"中湛","6237":"驊訊","6240":"松崗","6241":"鑫永洋","6242":"立康","6244":"茂迪","6245":"立端","6246":"臺龍","6248":"沛波","6259":"百徽","6261":"久元","6263":"普萊德","6264":"富裔","6265":"方土昶","6266":"泰詠","6270":"倍微","6274":"台燿","6275":"元山","6276":"安鈦克","6279":"胡連","6284":"佳邦","6290":"良維","6291":"沛亨","6292":"迅德","6294":"智基","6411":"晶焱","6417":"韋僑","6418":"詠昇","6419":"京晨科","6423":"億而得","6425":"易發","6432":"今展科","6435":"大中","6441":"廣錠","6461":"益得","6462":"神盾","6465":"威潤","6469":"大樹","6470":"宇智","6474":"華豫寧","6482":"弘煜科","6485":"點序","6486":"互動","6488":"環球晶","6492":"生華科","6494":"九齊","6496":"科懋","6498":"久禾光","6499":"益安","6506":"雙邦","6508":"惠光","6509":"聚和","6510":"精測","6512":"啟發電","6516":"勤崴國際","6517":"保勝光學","6523":"達爾膚","6527":"明達醫","6530":"創威","6532":"瑞耘","6535":"順藥","6538":"倉和","6542":"隆中","6546":"正基","6547":"高端疫苗","6548":"長科*","6556":"勝品","6560":"欣普羅","6561":"是方","6568":"宏觀","6569":"醫揚","6570":"維田","6574":"霈方","6576":"逸達","6577":"勁豐","6578":"達邦蛋白","6584":"南俊國際","6588":"東典光電","6590":"普鴻","6593":"台灣銘板","6596":"寬宏藝術","6597":"立誠","6603":"富強鑫","6609":"瀧澤科","6612":"奈米醫材","6613":"朋億*","6615":"慧智","6616":"特昇-KY","6617":"共信-KY","6620":"漢達","6624":"萬年清","6629":"泰金-KY","6637":"醫影","6640":"均華","6642":"富致","6643":"M31","6649":"台生材","6651":"全宇昕","6654":"天正國際","6661":"威健生技","6662":"樂斯科","6664":"群翊","6667":"信紘科","6679":"鈺太","6680":"鑫創電子","6683":"雍智科技","6684":"安格","6690":"安碁資訊","6692":"進能服","6693":"廣閎科","6697":"東捷資訊","6703":"軒郁","6708":"天擎","6712":"長聖","6716":"應廣","6720":"久昌","6721":"信實","6725":"矽科宏晟","6727":"亞泰金屬","6728":"上洋","6730":"常廣","6732":"昇佳電子","6733":"博晟生醫","6735":"美達科技","6739":"竹陞科技","6741":"91APP*-KY","6751":"智聯服務","6752":"叡揚","6761":"穩得","6762":"達亞","6763":"綠界科技*","6767":"台微醫","6785":"昱展新藥","6788":"華景電","6791":"虎門科技","6803":"崑鼎","6804":"明係","6811":"宏碁資訊","6821":"聯寶","6823":"濾能","6829":"千附精密","6840":"東研信超","6841":"長佳智能","6843":"進典","6844":"諾貝兒","6846":"綠茵","6855":"數泓科","6856":"鑫傳","6859":"伯特光","6865":"偉康科技","6870":"騰雲","6872":"浩宇生醫","6874":"倍力","6875":"國邑*","6877":"鏵友益","6881":"潤德","6884":"海柏特","6894":"衛司特","6895":"宏碩系統","6899":"創為精密","6903":"巨漢","6904":"伯鑫","6907":"雅特力-KY","6910":"德鴻","6913":"鴻呈","6922":"宸曜","6925":"意藍","6929":"佑全","6953":"家碩","6961":"旅天下","6967":"汎瑋材料","6968":"萬達寵物","6971":"惠民實業","6982":"大井泵浦","6996":"力領科技","6997":"博弘","7402":"邑錡","7547":"碩網","7556":"意德士","7584":"樂意","7642":"昶瑞機電","7703":"銳澤","7704":"明遠精密","7708":"全家餐飲","7709":"榮田","7712":"博盛半導體","7713":"威力德生醫","7714":"創泓科技","7715":"裕山","7716":"昱臺國際","7717":"萊德光電-KY","7718":"友鋮","7723":"築間","7728":"光焱科技","7734":"印能科技","7738":"東聯互動","7743":"金利食安","7744":"崴寶","7747":"昕奇雲端","7751":"竑騰","7753":"星亞","7757":"金色三麥","7767":"仁大資訊","7770":"君曜","7777":"能率亞洲","7782":"光速火箭","7792":"安葆","7805":"威聯通","7810":"捷創科技","7811":"民盛","8024":"佑華","8027":"鈦昇","8032":"光菱","8034":"榮群","8038":"長園科","8040":"九暘","8042":"金山電","8043":"蜜望實","8044":"網家","8047":"星雲","8048":"德勝","8049":"晶采","8050":"廣積","8054":"安國","8059":"凱碩","8064":"東捷","8066":"來思達","8067":"志旭","8068":"全達","8069":"元太","8071":"能率網通","8074":"鉅橡","8076":"伍豐","8077":"洛碁","8080":"泰霖","8083":"瑞穎","8084":"巨虹","8085":"福華","8086":"宏捷科","8087":"麗升能源","8088":"品安","8089":"康全電訊","8091":"翔名","8092":"建暐","8093":"保銳","8096":"擎亞","8097":"常珵","8099":"大世科","8102":"傑霖科技","8107":"大億金茂","8109":"博大","8111":"立碁","8121":"越峰","8147":"正淩","8155":"博智","8171":"天宇","8176":"智捷","8182":"加高","8183":"精星","8227":"巨有科技","8234":"新漢","8240":"華宏","8255":"朋程","8272":"全景軟體","8277":"商丞","8279":"生展","8284":"三竹","8289":"泰藝","8291":"尚茂","8299":"群聯","8342":"益張","8349":"恒耀","8354":"冠好","8358":"金居","8383":"千附","8390":"金益鼎","8401":"白紗科","8403":"盛弘","8409":"商之器","8410":"森田","8415":"大國鋼","8416":"實威","8421":"旭源","8423":"保綠-KY","8424":"惠普","8426":"紅木-KY","8431":"匯鑽科","8432":"東生華","8433":"弘帆","8435":"鉅邁","8436":"大江","8437":"大地-KY","8440":"綠電","8444":"綠河-KY","8446":"華研","8450":"霹靂","8455":"大拓-KY","8472":"納維康","8477":"創業家","8489":"三貝德","8905":"裕國","8906":"花王","8908":"欣雄","8916":"光隆","8917":"欣泰","8921":"沈氏","8923":"時報","8924":"大田","8927":"北基","8928":"鉅明","8929":"富堡","8930":"青鋼","8931":"大汽電","8932":"智通*","8933":"愛地雅","8935":"邦泰","8936":"國統","8937":"合騏","8938":"明安","8941":"關中","8942":"森鉅","9949":"琉園","9950":"萬國通","9951":"皇田","9960":"邁達康","9962":"有益","8349A":"恒耀甲特","01014S":"93中信貸a","01015S":"93中信貸b","01016S":"93中信貸c","01017S":"93中信貸d","01111S":"081中租賃A","01112S":"081中租賃B","01113S":"111中租賃A","01114S":"111中租賃B","00400A":"主動國泰動能高息","00403A":"主動統一升級50","1780":"立弘","2237":"華德動能-創","2249":"湧盛","2938":"床的世界","3485":"敘豐","3718":"中光電投控","4169":"泰宗","4178":"永笙-KY","4195":"基米-創","4582":"聚恆-創","6028":"公勝保經","6467":"泰合","6604":"儒億","6825":"和暢科技","6898":"程曦資訊","6938":"藍新資訊","6945":"圓祥生技","6947":"台鎔科技","6983":"華洋精機","6986":"和迅","7689":"大鵬科CLMX","7710":"東擎科技","7760":"享溫馨","7768":"頌勝科技","7772":"耀穎","7794":"宏碁智新","7803":"雲象科技-創","7806":"精華生醫","7812":"稜研科技-創","7814":"海昌生技","7818":"溢泰實業","7819":"精誠金融","7820":"立盈","7821":"神數","7822":"倍利科","7825":"和亞智慧","7827":"漢康-KY創","7828":"創新服務","7835":"永悅健康-創","7839":"達人網","7842":"天能綠電","7848":"騏億鑫","7855":"和運租車","7856":"漢測","7867":"特力屋","00401A":"主動摩根台灣鑫收","00402A":"主動安聯美國科技","00404A":"主動聯博動能50","00405A":"主動富邦台灣龍耀","00406A":"主動中信台灣收益","00407A":"主動凱基台灣","00408A":"主動第一金優股息","00409A":"主動復華全球50","00410A":"主動永豐科技趨勢","00412A":"主動安聯亞半導體","00413A":"主動玉山關鍵科技","00415A":"主動群益核心50","00416A":"主動台新臺灣中小","00418A":"主動復華台灣新星","00420A":"主動野村亞洲科技","009819":"中信數據及電力","009820":"元大納斯達克精選","009821":"野村稀土關鍵資源","009824":"群益美國科技巨頭","009826":"貝萊德世界股票","009827":"玉山未來全球算力","009828":"中信台日韓PCB","009829":"大華韓國KOSPI50","009831":"FT核心AI電力算力","009832":"兆豐美國黃金","009833":"野村韓國科技30","00991B":"貝萊德A級公司債","00997A":"主動群益美國增長","00999A":"主動野村臺灣高息","00411A":"主動統一前沿科技","009822":"華南永昌未來金融","009823":"群益S&P500","009825":"聯邦美國金融創新","00986D":"主動復華金融債息","00987D":"主動統一美債量化","00990B":"國泰收益非投等債","00992B":"街口優息非投債","00998A":"主動復華金融股息"};
+const DEF_SETTINGS = () => ({ goal: 30000, remit: 10, hide: false, nhiOn: true, divMode: 'confirm' });
+const newAccount = name => ({ id: 'a' + uid(), name, disc: 0.6, min: 20, loanRate: 0.025, txns: [] });
+
+function demoState() {
+  const a = newAccount('範例帳戶');
+  const T = (date, type, o) => Object.assign({ id: uid(), date, type }, o);
+  a.txns = [
+    T('2025-01-06', 'in', { amount: 600000, memo: '114 年定存金' }),
+    T('2025-01-08', 'buy', { code: '0056', shares: 6000, price: 35.1, fee: 180 }),
+    T('2025-01-08', 'buy', { code: '00878', shares: 10000, price: 22.4, fee: 191 }),
+    T('2025-02-10', 'buy', { code: '2412', shares: 1000, price: 121, fee: 103 }),
+    T('2025-04-15', 'buy', { code: '0050', shares: 1000, price: 150.5, fee: 129 }),
+    T('2025-04-15', 'cash', { code: '0056', shares: 6000, perShare: 1.07, amount: 6410, nhi: 0, remit: 10 }),
+    T('2025-05-26', 'cash', { code: '00878', shares: 10000, perShare: 0.47, amount: 4690, nhi: 0, remit: 10 }),
+    T('2025-07-15', 'cash', { code: '0056', shares: 6000, perShare: 0.866, amount: 5186, nhi: 0, remit: 10 }),
+    T('2025-07-30', 'cash', { code: '2412', shares: 1000, perShare: 4.7, amount: 4690, nhi: 0, remit: 10 }),
+    T('2025-08-18', 'cash', { code: '00878', shares: 10000, perShare: 0.4, amount: 3990, nhi: 0, remit: 10 }),
+    T('2025-10-16', 'cash', { code: '0056', shares: 6000, perShare: 0.866, amount: 5186, nhi: 0, remit: 10 }),
+    T('2025-11-18', 'cash', { code: '00878', shares: 10000, perShare: 0.4, amount: 3990, nhi: 0, remit: 10 }),
+    T('2026-01-05', 'in', { amount: 300000, memo: '115 年定存金' }),
+    T('2026-01-12', 'buy', { code: '0056', shares: 4000, price: 34.6, fee: 118 }),
+    T('2026-01-16', 'cash', { code: '0056', shares: 10000, perShare: 0.866, amount: 8650, nhi: 0, remit: 10 }),
+    T('2026-02-24', 'cash', { code: '00878', shares: 10000, perShare: 0.4, amount: 3990, nhi: 0, remit: 10 }),
+    T('2026-03-02', 'buy', { code: '00878', shares: 5000, price: 21.2, fee: 91 }),
+    T('2026-04-16', 'cash', { code: '0056', shares: 10000, perShare: 0.866, amount: 8650, nhi: 0, remit: 10 }),
+    T('2026-05-20', 'cash', { code: '00878', shares: 15000, perShare: 0.4, amount: 5990, nhi: 0, remit: 10 }),
+    T('2026-06-16', 'sell', { code: '0050', shares: 1000, price: 182, fee: 155, tax: 182 }),
+    T('2026-07-15', 'cash', { code: '0056', shares: 10000, perShare: 0.866, amount: 8650, nhi: 0, remit: 10 }),
+    T('2026-07-30', 'cash', { code: '2412', shares: 1000, perShare: 4.6, amount: 4590, nhi: 0, remit: 10 }),
+    T('2026-08-19', 'cash', { code: '00878', shares: 15000, perShare: 0.4, amount: 5990, nhi: 0, remit: 10 }),
+    T('2026-09-01', 'out', { amount: 20000, memo: '家用' }),
+    T('2026-10-16', 'cash', { code: '0056', shares: 10000, perShare: 0.866, amount: 8650, nhi: 0, remit: 10 }),
+    T('2026-10-21', 'loan', { amount: 1250, memo: '115 年 10 月利息' }),
+    T('2026-11-21', 'loan', { amount: 1250, memo: '115 年 11 月利息' })
+  ];
+  return {
+    v: 2, cur: a.id, settings: DEF_SETTINGS(), accounts: [a],
+    stocks: {
+      '0056': { name: '元大高股息', freq: '季配', price: 36.85, chg: 0.25, pdate: '2026-11-21', events: [{ id: uid(), ex: '2026-11-18', cash: 0.866, stock: 0, pay: '2026-12-10' }] },
+      '00878': { name: '國泰永續高股息', freq: '季配', price: 21.62, chg: -0.08, pdate: '2026-11-21', events: [{ id: uid(), ex: '2026-11-18', cash: 0.4, stock: 0, pay: '2026-12-16' }] },
+      '2412': { name: '中華電', freq: '年配', price: 131, chg: 0.5, pdate: '2026-11-21', events: [] },
+      '0050': { name: '元大台灣50', freq: '半年配', price: 184.2, chg: 1.2, pdate: '2026-11-21', events: [] }
+    }
+  };
+}
+function emptyState() {
+  const a = newAccount('我的帳戶');
+  return { v: 2, cur: a.id, settings: DEF_SETTINGS(), accounts: [a], stocks: {} };
+}
+function normalize(d) {
+  const s = JSON.parse(JSON.stringify(d || {}));
+  s.settings = Object.assign(DEF_SETTINGS(), s.settings || {});
+  s.stocks = s.stocks || {};
+  s.accounts = (s.accounts || []).map(a => Object.assign({ disc: 0.6, min: 20, loanRate: 0.025, txns: [] }, a));
+  if (!s.accounts.length) s.accounts = [newAccount('我的帳戶')];
+  if (!s.accounts.some(a => a.id === s.cur)) s.cur = s.accounts[0].id;
+  for (const c in s.stocks) { s.stocks[c].events = s.stocks[c].events || []; if ((!s.stocks[c].name || s.stocks[c].name === c) && TW_NAMES[c]) s.stocks[c].name = TW_NAMES[c]; }
+  return s;
+}
+
+let S = demoState();
+let painting = false;
+let mode = 'demo';     // demo | saved | local
+let store = null;      // {kind:'db', ref} | {kind:'local'}
+const V = { tab: 'home', page: null, code: null, ledger: 'hold', hist: 'chart', calView: 'cal', calMonth: todayISO().slice(0, 7), calOn: { ex: true, pay: true }, metric: 'div', openAcc: null, budget: 10000, plan: { m: 10000, y: null, g: 2, re: true }, armed: null };
+try { const t = localStorage.getItem('wwc-tab'); if (['home', 'ledger', 'hist', 'cal'].includes(t)) V.tab = t; } catch (e) {}
+
+const acc = () => S.accounts.find(a => a.id === S.cur) || S.accounts[0];
+const stockName = c => { const n = S.stocks[c] && S.stocks[c].name; return (n && n !== c ? n : TW_NAMES[c]) || n || ''; };
+const sortTx = list => list.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+
+function feeFor(a, amount) { return amount > 0 ? Math.max(a.min, Math.floor(amount * 0.001425 * a.disc)) : 0; }
+function taxRate(code, date) {
+  code = (code || '').toUpperCase();
+  if (/^00\d+[A-Z]*B$/.test(code)) return (date || todayISO()) <= '2026-12-31' ? 0 : 0.001;
+  if (/^00/.test(code)) return 0.001;
+  return 0.003;
+}
+function sharesAt(a, code, date) { // shares held at the start of `date` (trades on that date excluded)
+  let sh = 0;
+  for (const t of a.txns) if (t.code === code && t.date < date) {
+    if (t.type === 'buy' || t.type === 'stock') sh += t.shares;
+    else if (t.type === 'sell') sh -= t.shares;
+  }
+  return Math.max(0, sh);
+}
+
+// 配發日：備註寫「12/3配發」或「114/11/14配發」就用它，否則用紀錄日期
+function payDateOf(t) {
+  const m = /(?:(\d{2,3})\/)?(\d{1,2})\/(\d{1,2})\s*配發/.exec(t.memo || '');
+  if (!m) return t.date;
+  let y = m[1] ? +m[1] + 1911 : +t.date.slice(0, 4); const mo = +m[2], d = +m[3];
+  if (!m[1] && mo < +t.date.slice(5, 7)) y++;
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+const origOf = t => t.gross != null ? t.gross : t.amount + (t.other || 0); // 原始股利＝未扣匯費等費用的配發現金
+const divPaid = t => t.type === 'cash' && t.amount > 0 && payDateOf(t) <= todayISO();
+/* ================= calculations ================= */
+function compute(a) {
+  const pos = {}, realized = {}, divs = {};
+  let inSum = 0, outSum = 0, loanSum = 0, buySum = 0, sellNet = 0, cashSum = 0, origSum = 0, otherSum = 0, firstIn = null;
+  const P = c => pos[c] || (pos[c] = { code: c, shares: 0, cost: 0, buyQty: 0, buyAmt: 0, divOnPos: 0, divRecv: 0, divPool: 0, first: null });
+  for (const t of sortTx(a.txns)) {
+    const p = t.code ? P(t.code) : null;
+    if (t.type === 'in') { inSum += t.amount; if (!firstIn) firstIn = t.date; }
+    else if (t.type === 'out') outSum += t.amount;
+    else if (t.type === 'loan') loanSum += t.amount;
+    else if (t.type === 'buy') {
+      const c = t.shares * t.price + (t.fee || 0);
+      if (p.shares <= 0) { p.first = t.date; p.divOnPos = 0; p.divRecv = 0; p.divPool = 0; p.buyQty = 0; p.buyAmt = 0; }
+      p.shares += t.shares; p.cost += c; p.buyQty += t.shares; p.buyAmt += c; buySum += c;
+      if (!firstIn) firstIn = t.date;
+    } else if (t.type === 'sell') {
+      const sh = Math.min(t.shares, p.shares), avg = p.shares ? p.cost / p.shares : 0;
+      const net = sh * t.price - (t.fee || 0) - (t.tax || 0);
+      const r = realized[t.code] || (realized[t.code] = { code: t.code, qty: 0, cost: 0, proceeds: 0, sellAmt: 0, fee: 0, tax: 0, pl: 0, div: 0, first: p.first, last: t.date });
+      const dShare = p.shares ? p.divPool * sh / p.shares : 0; r.div += dShare; p.divPool -= dShare;
+      r.qty += sh; r.cost += avg * sh; r.proceeds += net; r.sellAmt += sh * t.price; r.fee += t.fee || 0; r.tax += t.tax || 0; r.pl += net - avg * sh; r.last = t.date;
+      p.cost -= avg * sh; p.shares -= sh; sellNet += net;
+      if (p.shares <= 0) { p.shares = 0; p.cost = 0; }
+    } else if (t.type === 'stock') {
+      p.shares += t.shares;
+      const d = divs[t.code] || (divs[t.code] = { code: t.code, cash: 0, int: 0, sh: 0, n: 0 }); d.sh += t.shares;
+    } else if (t.type === 'cash') {
+      cashSum += t.amount; origSum += origOf(t); otherSum += t.other || 0; loanSum += t.interest || 0; if (p) { p.divOnPos += t.amount - (t.interest || 0); if (t.date <= todayISO()) p.divRecv += t.amount; if (p.shares > 0) p.divPool += t.amount; else if (realized[t.code]) realized[t.code].div += t.amount; }
+      const d = divs[t.code] || (divs[t.code] = { code: t.code, cash: 0, int: 0, sh: 0, n: 0 }); d.cash += t.amount; d.orig = (d.orig || 0) + origOf(t); d.oth = (d.oth || 0) + (t.other || 0); d.int += t.interest || 0; d.n++;
+    }
+  }
+  const today = todayISO();
+  const holds = Object.values(pos).filter(p => p.shares > 0).map(p => {
+    const st = S.stocks[p.code] || {};
+    const price = st.price != null ? st.price : (p.buyQty ? p.buyAmt / p.buyQty : 0);
+    const mv = p.shares * price, pl = mv - p.cost, ret = p.cost ? pl / p.cost : 0;
+    return Object.assign(p, { name: st.name || p.code, freq: st.freq || '', price, chg: st.chg || 0, mv, pl, ret,
+      ann: annualize(ret, daysBetween(p.first || today, today)),
+      plD: pl + p.divRecv, retD: p.cost ? (pl + p.divRecv) / p.cost : 0, annD: annualize(p.cost ? (pl + p.divRecv) / p.cost : 0, daysBetween(p.first || today, today)),
+      avgBuy: p.buyQty ? p.buyAmt / p.buyQty : 0, avgCost: p.shares ? (p.cost - p.divOnPos) / p.shares : 0,
+      today: (st.chg || 0) * p.shares });
+  }).sort((x, y) => y.mv - x.mv);
+  const mv = holds.reduce((s, h) => s + h.mv, 0), cost = holds.reduce((s, h) => s + h.cost, 0);
+  const unreal = mv - cost, divHeld = holds.reduce((s, h) => s + h.divRecv, 0);
+  const realList = Object.values(realized);
+  const real = realList.reduce((s, r) => s + r.pl, 0), realDiv = realList.reduce((s, r) => s + r.div, 0), realCost = realList.reduce((s, r) => s + r.cost, 0);
+  const todayPL = holds.reduce((s, h) => s + h.today, 0);
+  const invest = inSum - outSum;
+  const balance = inSum - outSum - buySum + sellNet + cashSum - loanSum;
+  const sellCost = holds.reduce((s, h) => s + feeFor(a, h.mv) + Math.floor(h.mv * taxRate(h.code)), 0);
+  const stockPL = unreal + real, netDiv = cashSum - loanSum, total = stockPL + netDiv;
+  const days = firstIn ? daysBetween(firstIn, today) : 0;
+  // dividends expected this / next month from announced events
+  const ym = today.slice(0, 7), nd = new Date(today); nd.setDate(1); nd.setMonth(nd.getMonth() + 1); const ym2 = nd.toISOString().slice(0, 7);
+  let thisM = 0, nextM = 0;
+  for (const c in S.stocks) for (const e of S.stocks[c].events) {
+    if (!e.cash || !e.pay) continue;
+    const sh = e.ex <= today ? sharesAt(a, c, e.ex) : (pos[c] ? pos[c].shares : 0);
+    const amt = sh * e.cash;
+    if (e.pay.slice(0, 7) === ym) thisM += amt; else if (e.pay.slice(0, 7) === ym2) nextM += amt;
+  }
+  // last 12 months / this year
+  const y0 = today.slice(0, 4); const cut = new Date(today); cut.setFullYear(cut.getFullYear() - 1); const cutISO = cut.toISOString().slice(0, 10);
+  let div12 = 0, divYear = 0, loanYear = 0, monthsWithDiv = new Set();
+  for (const t of a.txns) {
+    if (t.type === 'cash') { if (t.date > cutISO) div12 += t.amount; if (t.date.slice(0, 4) === y0) { divYear += t.amount; loanYear += t.interest || 0; monthsWithDiv.add(t.date.slice(5, 7)); } }
+    if (t.type === 'loan' && t.date.slice(0, 4) === y0) loanYear += t.amount;
+  }
+  const monthsElapsed = +today.slice(5, 7);
+  return { holds, mv, cost, unreal, divHeld, unrealRet: cost ? unreal / cost : 0, real, realDiv, realCost, realRet: realCost ? real / realCost : 0, realList, divs: Object.values(divs),
+    cashSum, origSum, otherSum, loanSum, netDiv, divCount: a.txns.filter(divPaid).length, inSum, outSum, invest, balance,
+    value: balance + mv, netValue: balance + mv - sellCost, stockPL, total,
+    stockRet: invest ? stockPL / invest : 0, totalRet: invest ? total / invest : 0, days,
+    totalAnn: invest ? annualize(total / invest, days) : 0, stockAnn: invest ? annualize(stockPL / invest, days) : 0,
+    thisM, nextM, todayPL, todayRet: (mv - todayPL) ? todayPL / (mv - todayPL) : 0,
+    div12, divYear, loanYear, monthAvg: (divYear - loanYear) / Math.max(1, monthsElapsed) };
+}
+
+/* ================= storage ================= */
+let writeTimer = null, writing = Promise.resolve();
+function persist() {
+  if (mode === 'demo') return;
+  clearTimeout(writeTimer);
+  writeTimer = setTimeout(() => {
+    const snap = JSON.parse(JSON.stringify(S));
+    writing = writing.then(async () => {
+      try {
+        if (store && store.kind === 'db') { await store.ref.set(snap); syncWatch(); }
+        else if (store && store.kind === 'fb') await store.ref.set({ state: snap, updatedAt: Date.now() });
+        else localStorage.setItem('wwc-state', JSON.stringify(snap));
+      } catch (e) { toast(e && e.code === 'quota_exceeded' ? '儲存空間滿了，請先匯出備份' : '儲存失敗，請檢查網路後再試'); }
+    });
+  }, 350);
+}
+function startOwn(keepDemo) {
+  if (mode !== 'demo') return false;
+  S = keepDemo ? normalize(S) : emptyState();
+  mode = store && store.kind === 'db' ? 'saved' : 'local';
+  persist();
+  return true;
+}
+const FB = { user: null, auth: null, err: '' };
+// 版本：public＝公開版（任何人可註冊，每人一份空白帳本）；personal＝個人版（只限擁有者帳號，資料放在獨立的資料區）
+const EDITION = window.APP_EDITION === 'personal' ? 'personal' : 'public';
+const OWNERS = (window.OWNER_EMAILS || []).map(x => String(x).toLowerCase());
+if (EDITION === 'personal') document.title = '穩穩存・個人版';
+function loadScript(src) { return new Promise((ok, no) => { const x = document.createElement('script'); x.src = src; x.onload = ok; x.onerror = no; document.head.appendChild(x); }); }
+async function initFirebase(cfg) {
+  const v = '10.12.2', base = `https://www.gstatic.com/firebasejs/${v}/`;
+  await loadScript(base + 'firebase-app-compat.js');
+  await Promise.all([loadScript(base + 'firebase-auth-compat.js'), loadScript(base + 'firebase-firestore-compat.js')]);
+  firebase.initializeApp(cfg);
+  const db = firebase.firestore();
+  try { await db.enablePersistence({ synchronizeTabs: true }); } catch (e) {}
+  FB.auth = firebase.auth();
+  try { await FB.auth.getRedirectResult(); } catch (e) { FB.err = loginError(e); }
+  let unsub = null;
+  FB.auth.onAuthStateChanged(user => {
+    if (unsub) { unsub(); unsub = null; }
+    FB.user = user;
+    if (!user) { store = null; mode = 'demo'; S = demoState(); V.needLogin = !V.browseDemo; applyMarket(); render(); return; }
+    if (EDITION === 'personal' && OWNERS.length && !OWNERS.includes(String(user.email || '').toLowerCase())) {
+      FB.err = `這是私人版本，${user.email || '這個帳號'} 沒有使用權限。請改用公開版。`; V.needLogin = true; store = null; mode = 'demo'; S = demoState();
+      FB.auth.signOut(); render(); return;
+    }
+    V.needLogin = false; V.browseDemo = false;
+    const ref = db.collection(EDITION === 'personal' ? 'personal' : 'users').doc(user.uid);
+    store = { kind: 'fb', ref };
+    unsub = ref.onSnapshot(snap => {
+      if (snap.exists && snap.data().state) { S = normalize(snap.data().state); mode = 'saved'; }
+      else if (mode !== 'saved' || !snap.exists) { S = emptyState(); S.accounts[0].name = (user.displayName || '我的帳戶').slice(0, 20); mode = 'saved'; persist(); }
+      applyMarket(); autoPost(); render();
+    }, e => { toast('讀取雲端資料失敗：' + (e.code || e.message)); });
+  });
+}
+function loginError(e) {
+  const m = { 'auth/invalid-credential': 'Email 或密碼不正確', 'auth/wrong-password': 'Email 或密碼不正確', 'auth/user-not-found': '找不到這個帳號，請先註冊', 'auth/email-already-in-use': '這個 Email 已經註冊過，請直接登入', 'auth/weak-password': '密碼至少要 6 個字', 'auth/invalid-email': 'Email 格式不對', 'auth/popup-closed-by-user': '登入視窗被關閉了', 'auth/network-request-failed': '網路連線失敗，請稍後再試', 'auth/unauthorized-domain': '這個網址還沒加入 Firebase 的授權網域' };
+  return m[e && e.code] || ('登入失敗：' + ((e && (e.code || e.message)) || '未知錯誤'));
+}
+async function initStore() {
+  const cfg = window.FIREBASE_CONFIG;
+  if (!(window.claude && window.claude.use) && cfg && cfg.apiKey) {
+    V.needLogin = true; render();
+    try { await initFirebase(cfg); } catch (e) { V.needLogin = false; FB.err = '無法連到 Firebase，暫時改存在這台裝置'; useLocal(); toast(FB.err); }
+    return;
+  }
+  let done = false;
+  const timer = setTimeout(() => { if (!done) { done = true; useLocal(); } }, 10000);
+  try {
+    const cl = window.claude;
+    if (cl && cl.use) {
+      const [user, db] = await Promise.all([cl.use('user'), cl.use('db')]);
+      if (user && db) {
+        const id = await user.id();
+        const ref = db.doc('data/users/' + id + '/state');
+        store = { kind: 'db', ref, wl: db.doc('wl/' + id) };
+        // 每日資料：Claude 排程每天 15:00 從 Yahoo股市抓好，存在 market/latest
+        db.doc('market/latest').onSnapshot(m => { if (m.exists) setMarket(m.data()); }, () => {});
+        store.approvedRef = db.doc('market/approved');
+        if (!IS_PUBLIC()) {
+          store.approvedRef.onSnapshot(d => { SHARED.approved = d.exists ? d.data() : { codes: {}, dismissed: {} }; render(); }, () => {});
+          db.doc('market/requests').onSnapshot(d => { SHARED.requests = d.exists ? d.data() : null; render(); }, () => {});
+          db.doc('market/watch').onSnapshot(d => { const w = d.exists ? d.data() : null; if (w && V.syncing && w.updated !== (SHARED.watch || {}).updated) { V.syncing = false; toast('共用清單已同步'); } SHARED.watch = w; render(); }, () => {});
+        }
+        // 代號對照的新增與更名：每月 1 號由排程寫入 market/names（{ names: { 代號: 名稱 }, asof }）
+        db.doc('market/names').onSnapshot(d => { const x = d.exists && d.data(); if (x && x.names) { applyNames(x); render(); } }, () => {});
+        ref.onSnapshot(snap => {
+          if (!done) { done = true; clearTimeout(timer); }
+          if (snap.exists) { S = normalize(snap.data()); mode = 'saved'; applyMarket(); autoPost(); render(); syncWatch(); }
+        }, () => { if (!done) { done = true; clearTimeout(timer); useLocal(); } });
+        return;
+      }
+    }
+  } catch (e) {}
+  if (!done) { done = true; clearTimeout(timer); useLocal(); }
+}
+function useLocal() {
+  store = { kind: 'local' };
+  try { const s = localStorage.getItem('wwc-state'); if (s) { S = normalize(JSON.parse(s)); mode = 'local'; applyMarket(); autoPost(); render(); } } catch (e) {}
+}
+// 每日資料：Claude 排程每個交易日 15:00 從 Yahoo股市抓取收盤價與除權息，寫進 App 資料庫的 market/latest
+let MARKET = null;
+function setMarket(m) {
+  if (!m || !m.prices) return;
+  if (MARKET && String(m.updated || '') < String(MARKET.updated || '')) return; // 只用較新的資料
+  MARKET = m;
+  for (const [c, q] of Object.entries(MARKET.prices || {})) if (q.name && !TW_NAMES[c]) TW_NAMES[c] = q.name;
+  applyMarket(); render();
+}
+function readEmbedded(id) { try { return JSON.parse(document.getElementById(id).textContent || '{}'); } catch (e) { return {}; } }
+function applyNames(x) { if (x && x.names) for (const [c, n] of Object.entries(x.names)) if (/^[0-9A-Z]{4,7}$/.test(c) && typeof n === 'string' && n.length <= 20) TW_NAMES[c] = n; }
+async function loadFeed() {
+  // 公開版：排程每天把資料直接寫進頁面（market-data、names-data）；個人版另外由資料庫提供
+  applyNames(readEmbedded('names-data'));
+  const em = readEmbedded('market-data'); if (em.prices) setMarket(em);
+  if (window.claude && window.claude.use) return;
+  try {
+    const r = await fetch('./data/market.json', { cache: 'no-store' });
+    if (r.ok) setMarket(await r.json());
+  } catch (e) {}
+}
+// 把「目前持有」的股票代號告訴每日排程（只有代號，不含股數或金額）：持有就加入，全部賣出就移除
+let wlSent = null;
+function syncWatch() {
+  if (!store || store.kind !== 'db' || !store.wl || mode === 'demo') return;
+  const held = new Set();
+  for (const acc of S.accounts) for (const h of compute(acc).holds) if (h.shares > 0) held.add(h.code);
+  const codes = [...held].filter(c => /^[0-9A-Z]{4,6}$/.test(c)).sort();
+  const key = codes.join(',');
+  if (key === wlSent) return;
+  wlSent = key;
+  store.wl.set({ codes, at: Date.now() }).catch(() => { wlSent = null; });
+}
+function applyMarket() {
+  if (!MARKET) return;
+  let newEv = false;
+  for (const [code, st] of Object.entries(S.stocks)) {
+    const q = MARKET.prices && MARKET.prices[code];
+    if (q && q.price != null) Object.assign(st, { price: q.price, chg: q.chg || 0, pdate: MARKET.date || st.pdate });
+    if ((!st.name || st.name === code) && q && q.name) st.name = q.name;
+    for (const e of (MARKET.events && MARKET.events[code]) || []) {
+      const old = st.events.find(x => x.ex === e.ex);
+      if (!old) { st.events.push(Object.assign({ id: uid(), auto: true }, e)); newEv = true; }
+      else if (old.auto && ((e.pay && !old.pay) || e.cash !== old.cash || e.stock !== old.stock)) { Object.assign(old, e); newEv = true; }
+    }
+  }
+  S.feedAt = MARKET.updated || MARKET.date;
+  if (newEv && mode !== 'demo') { autoPost(); persist(); }
+}
+
+/* ---- automatic dividend posting: on pay date, record cash / stock dividends from announced events ---- */
+function divCalc(a, code, e) {
+  const sh = sharesAt(a, code, e.ex);
+  const gross = Math.round(sh * (e.cash || 0));
+  const nhi = S.settings.nhiOn && gross >= 20000 ? Math.round(gross * 0.0211) : 0;
+  const remit = gross > 0 ? S.settings.remit : 0;
+  const stockSh = Math.floor(sh * (e.stock || 0) / 10);
+  return { sh, gross, nhi, remit, net: Math.max(0, gross - nhi - remit), stockSh };
+}
+function autoPost() {
+  if (mode === 'demo' || S.settings.divMode !== 'auto') return;
+  const today = todayISO(); let n = 0;
+  for (const a of S.accounts) for (const code in S.stocks) for (const e of S.stocks[code].events) {
+    if (!e.pay || e.pay > today) continue;
+    const c = divCalc(a, code, e);
+    if (c.sh <= 0) continue;
+    if (e.cash && !a.txns.some(t => t.type === 'cash' && t.code === code && t.ev === e.id) && !a.txns.some(t => t.type === 'cash' && t.code === code && t.date === e.pay)) {
+      a.txns.push({ id: uid(), date: e.ex, type: 'cash', code, shares: c.sh, perShare: e.cash, gross: c.gross, other: c.nhi + c.remit, amount: c.net, interest: 0, ev: e.id, auto: true }); n++;
+    }
+    if (e.stock && c.stockSh > 0 && !a.txns.some(t => t.type === 'stock' && t.code === code && t.ev === e.id)) {
+      a.txns.push({ id: uid(), date: e.ex, type: 'stock', code, shares: c.stockSh, perShare: e.stock, ev: e.id, auto: true }); n++;
+    }
+  }
+  if (n) { persist(); setTimeout(() => toast(`已自動記入 ${n} 筆股利`), 300); }
+}
+function isRecorded(a, code, e, type) {
+  return a.txns.some(t => t.type === type && t.code === code && (t.ev === e.id || t.date === e.ex || (e.pay && t.date === e.pay)));
+}
+function pendingDivs(a) { // 待確認：已公告、已過除權息日、當時有持股、還沒入帳
+  const today = todayISO(), out = [];
+  for (const code in S.stocks) for (const e of S.stocks[code].events) {
+    if (e.ex > today) continue;
+    const c = divCalc(a, code, e); if (!c.sh) continue;
+    const needCash = e.cash && !isRecorded(a, code, e, 'cash'), needStock = e.stock && c.stockSh && !isRecorded(a, code, e, 'stock');
+    if (needCash || needStock) out.push({ code, e, c });
+  }
+  return out.sort((x, y) => x.e.ex < y.e.ex ? 1 : -1);
+}
+/* ---- 共用每日更新清單：公開版使用者申請加入／取消（寄 Email 給 App 擁有者），擁有者在個人版審核 ---- */
+const OWNER_MAIL = 'loveyanglitw@gmail.com';
+// 公開版的頁面帶有 <meta name="wwc-edition" content="public">（發布公開版時加入）；頁面標題不一定會跟著 artifact 名稱改，不能只靠標題判斷
+const IS_PUBLIC = () => !!document.querySelector('meta[name="wwc-edition"][content="public"]') || /公開版/.test(document.title);
+let SHARED = { approved: null, requests: null, watch: null }; // 個人版：market/approved、market/requests
+function heldCodes() { const set = new Set(); for (const acc of S.accounts) for (const h of compute(acc).holds) if (h.shares > 0) set.add(h.code); return [...set].sort(); }
+function listCodes() { return new Set(Object.keys((MARKET && MARKET.prices) || {})); }
+function reqMail(kind, codes) {
+  const subj = kind === 'add' ? `[穩穩存] 申請加入每日更新：${codes.join(', ')}` : `[穩穩存] 取消每日更新：${codes.join(', ')}`;
+  const body = (kind === 'add' ? '我持有以下股票，希望加入穩穩存的每日股價自動更新：\n' : '我已經不再持有以下股票，可以從每日更新移除：\n') + codes.map(c => `${c} ${stockName(c)}`).join('\n') + '\n\n（由穩穩存 App 自動產生，請直接寄出）';
+  return { subj, body, href: `mailto:${OWNER_MAIL}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}` };
+}
+function requestCard() {
+  if (!IS_PUBLIC() || mode === 'demo' || !MARKET) return '';
+  const req = S.requested || {}, inList = listCodes(), held = heldCodes();
+  const need = held.filter(c => !inList.has(c) && !(req[c] && daysBetween(req[c], todayISO()) < 7));
+  const gone = Object.keys(req).filter(c => !held.includes(c));
+  let out = '';
+  if (need.length) {
+    const m = reqMail('add', need), gm = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(OWNER_MAIL)}&su=${encodeURIComponent(m.subj)}&body=${encodeURIComponent(m.body)}`;
+    const cp = (k, label, val, tall) => `<div style="display:flex;flex-direction:column;gap:4px"><span class="small" style="display:flex;justify-content:space-between;align-items:center">${label}<button class="btn small" data-a="copyField" data-v="${k}">複製</button></span>${tall ? `<textarea id="rq-${k}" readonly rows="4" style="width:100%;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--card);color:var(--ink);resize:none">${esc(val)}</textarea>` : `<input id="rq-${k}" readonly value="${esc(val)}" style="width:100%;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--card);color:var(--ink)">`}</div>`;
+    out += `<div class="banner warn" style="flex-direction:column;align-items:stretch;gap:10px"><span class="sp"><b class="gold">${need.length} 檔持股沒有每日自動更新</b>　${need.map(c => esc(c + ' ' + stockName(c))).join('、')}。可以寄信請 App 擁有者加入，沒加入前股價請在個股頁自行更新。</span>
+      ${V.reqOpened ? `<span class="small"><b>寄信方式：</b>複製下面三欄，到你平常用的信箱（Gmail、Yahoo、Outlook 都可以）開一封新信貼上寄出。有 Gmail 的話，也可以按「用 Gmail 網頁寄信」，內容會自動填好。複製按鈕沒反應時，長按欄位裡的文字就能複製。</span>
+      ${cp('to', '收件人', OWNER_MAIL)}${cp('subj', '主旨', m.subj)}${cp('body', '內容', m.body, true)}
+      <span style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn small primary" href="${esc(gm)}" target="_blank" rel="noopener">用 Gmail 網頁寄信</a><a class="btn small" href="${esc(m.href)}" target="_blank" rel="noopener">用手機郵件 App</a><button class="btn small" data-a="reqSent" data-v="${esc(need.join(','))}">我已寄出</button><button class="btn small" data-a="reqClose">收起</button></span>`
+      : `<span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small primary" data-a="reqOpen">申請加入每日更新</button></span>`}</div>`;
+  }
+  if (gone.length) { const m = reqMail('cancel', gone); out += `<div class="banner" style="flex-direction:column;align-items:stretch;gap:8px"><span class="sp">你已經賣光 ${gone.map(c => esc(c + ' ' + stockName(c))).join('、')}，之前申請過每日更新。可以寄信通知擁有者移除，把名額讓給其他人。</span><span style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn small" href="${esc(m.href)}" target="_blank" rel="noopener" data-a="cancelSent" data-v="${esc(gone.join(','))}">寄信通知移除</a><button class="btn small" data-a="reqCopy" data-v="cancel:${esc(gone.join(','))}">複製內容</button><button class="btn small" data-a="cancelSent" data-v="${esc(gone.join(','))}">不用了</button></span></div>`; }
+  return out;
+}
+const SYNC_TRIGGER = 'trig_01YGG5pTTLDCd9bgmpN7FR2r', SYNC_GAP = 30 * 60000;
+function membersCard() {
+  const w = SHARED.watch;
+  const left = (S.settings.lastSync || 0) + SYNC_GAP - Date.now(), wait = left > 0 ? Math.ceil(left / 60000) : 0;
+  const btn = V.syncing ? '<button class="btn small" disabled>同步中…</button>' : wait ? `<button class="btn small" disabled>${wait} 分鐘後可再同步</button>` : '<button class="btn small primary" data-a="syncNow">立即同步</button>';
+  return `<div class="list">
+      <div class="row"><div class="main"><span style="font-size:15px">公開版成員持股（自動）</span><span class="st">${w ? '上次同步 ' + esc(w.updated || '') + '・每天 23:00 自動同步' : '還沒同步過・每天 23:00 自動同步'}</span></div>${btn}</div>
+    </div>`;
+}
+async function syncNow() {
+  if (V.syncing) return;
+  if ((S.settings.lastSync || 0) + SYNC_GAP > Date.now()) { toast('每 30 分鐘只能同步一次'); return; }
+  let mcp = null; try { mcp = window.claude && window.claude.use ? await window.claude.use('mcp') : null; } catch (e) {}
+  if (!mcp) { toast('這個畫面無法啟動同步，請在 claude.ai 打開個人版'); return; }
+  let server = null;
+  try { const l = await mcp.listTools(); const hit = (l.servers || []).find(x => (x.tools || []).some(t => t.name === 'fire_trigger')) || (l.servers || []).find(x => /claude.?code.?remote/i.test(x.server)); server = hit && hit.server; } catch (e) {}
+  if (!server) { toast('找不到排程工具，請確認 Claude 已連接「Claude Code Remote」'); return; }
+  V.syncing = true; render();
+  try {
+    await mcp.callTool(server, 'fire_trigger', { trigger_id: SYNC_TRIGGER });
+    S.settings.lastSync = Date.now(); persist(); toast('已開始同步，約 1～2 分鐘後更新');
+    setTimeout(() => { if (V.syncing) { V.syncing = false; render(); } }, 5 * 60000);
+  } catch (e) {
+    V.syncing = false;
+    const c = e && e.code;
+    toast(c === 'approval_required' || c === 'consent_required' || c === 'not_in_manifest' ? '需要你允許 App 使用排程工具，請再按一次並按允許'
+      : c === 'needs_reauth' || c === 'server_not_connected' ? '請到 claude.ai 設定 → 連接器重新連接排程工具'
+      : c === 'tool_error' ? '同步排程啟動失敗：' + (e.message || '').slice(0, 60)
+      : '暫時無法啟動同步，請稍後再試');
+  }
+  render();
+}
+function sharedListCard() {
+  if (IS_PUBLIC() || !store || store.kind !== 'db' || mode === 'demo') return '';
+  const ap = (SHARED.approved && SHARED.approved.codes) || {}, rq = ((SHARED.requests && SHARED.requests.pending) || []).filter(p => !ap[p.code]);
+  const mine = heldCodes(), apCodes = Object.keys(ap).filter(c => !mine.includes(c));
+  const roster = [...new Set([...mine, ...apCodes, ...(((SHARED.watch && SHARED.watch.members) || []).map(m => m.code))])].filter(c => /^[0-9A-Z]{4,6}$/.test(c)), used = Math.min(roster.length, 40);
+  const pendRows = rq.map(p => `<div class="row"><div class="main"><span class="t"><b class="num">${esc(p.code)}</b> ${esc(stockName(p.code))}</span><span class="st">${(p.from || []).length} 人申請・${esc((p.from || []).join('、'))}・${esc(p.date || '')}</span></div><button class="btn small primary" data-a="shApprove" data-v="${esc(p.code)}">同意</button><button class="btn small" data-a="shDismiss" data-v="${esc(p.code)}">略過</button></div>`).join('');
+  const apRows = apCodes.map(c => `<div class="row"><div class="main"><span class="t"><b class="num">${esc(c)}</b> ${esc(stockName(c))}</span><span class="st">${(ap[c].requesters || []).length ? (ap[c].requesters || []).length + ' 人持有・' : ''}${esc(ap[c].approvedAt || '')} 加入</span></div><button class="btn small" data-a="shRemove" data-v="${esc(c)}">移除</button></div>`).join('');
+  return `<div class="h2row"><h2>共用更新清單</h2><span class="small num">已用 ${used}／40 檔</span></div>
+    ${rq.length ? `<div class="list" style="border:1.5px solid var(--gold)"><div class="row"><div class="main"><b class="gold">待審核申請 ${rq.length} 筆</b><span class="st">每天 15:00 從你的 Gmail 整理（${esc(OWNER_MAIL)}）</span></div></div>${pendRows}</div>` : ''}
+    <div class="list">
+      <div class="row"><div class="main"><span style="font-size:15px">名單</span><span class="st">${roster.length ? esc(roster.map(c => /^00/.test(c) ? c : (stockName(c) || c)).join('、')) : '目前沒有股票'}</span></div><span class="small num">${roster.length} 檔</span></div>
+      ${apRows || `<div class="row"><div class="main"><span class="st">還沒有同意加入的股票</span></div></div>`}
+    </div>
+    ${membersCard()}
+    <div style="display:flex;gap:8px"><div class="field pick-wrap" style="flex:1"><label for="shAdd">新增代號</label><input id="shAdd" class="num" autocomplete="off" placeholder="輸入代號，例：00919" style="text-transform:uppercase"></div><button class="btn primary" data-a="shAdd" style="align-self:stretch">同意加入</button></div>
+    <p class="small" style="margin:0 4px">公開版的人持有清單外的股票時，可以寄信向你申請；同意後隔天 15:00 起每天更新。你自己的持股不用在這裡管理。</p>`;
+}
+function saveApproved(mut) {
+  if (!store || !store.approvedRef) return;
+  const cur = JSON.parse(JSON.stringify(SHARED.approved || { codes: {}, dismissed: {} }));
+  cur.codes = cur.codes || {}; cur.dismissed = cur.dismissed || {};
+  mut(cur); SHARED.approved = cur; render();
+  store.approvedRef.set(cur).catch(() => toast('儲存失敗，請檢查網路後再試'));
+}
+function pendingCard(a, compact) {
+  const pend = pendingDivs(a); if (!pend.length) return '';
+  if (compact) return `<button class="banner warn rowbtn" data-a="goPending" style="width:100%"><span class="sp"><b class="gold">${pend.length} 筆股利待確認</b>　已依公告算好，填上利息後按完成就入帳</span><b class="gold">去確認 ›</b></button>`;
+  return `<div class="h2row"><h2 style="font-size:15px">待確認股利（${pend.length}）</h2><span class="small">已公告、已除權息、還沒入帳</span></div>
+    <div class="list" style="border:1.5px solid var(--gold)">${pend.map(p => `<div class="row"><div class="main"><span class="t"><b class="num">${esc(p.code)}</b> ${esc(stockName(p.code))}</span><span class="st num">除權息 ${roc(p.e.ex)}${p.e.pay ? '・' + (p.e.pay > todayISO() ? roc(p.e.pay) + ' 發放' : '已發放') : ''}・${grp(p.c.sh)} 股 × ${p.e.cash || 0}${p.e.stock ? '・配股 ' + p.e.stock : ''}</span><span class="st">預估原始股利 <b class="num gold">${money(p.c.gross)}</b>${p.c.stockSh ? '・配股 ' + grp(p.c.stockSh) + ' 股' : ''}</span></div><button class="btn small primary" data-a="confirmDiv" data-v="${esc(p.code)}" data-ev="${p.e.id}">確認入帳</button></div>`).join('')}</div>`;
+}
+/* ================= rendering ================= */
+function pageLogin() {
+  return `<div style="min-height:70vh;display:flex;flex-direction:column;justify-content:center;gap:16px;padding-top:24px">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center">
+      <span class="av" style="width:64px;height:64px;font-size:28px;border-radius:20px">穩</span>
+      <h1 style="margin:0;font-size:26px">穩穩存${EDITION === 'personal' ? ' <span class="small" style="font-size:14px;vertical-align:middle;border:1px solid var(--accent);color:var(--accent);border-radius:999px;padding:1px 8px">個人版</span>' : ''}</h1>
+      <p class="small" style="margin:0;font-size:14px">台股存股記帳・股價與除權息每日自動更新<br>登入後資料存在雲端，換手機也不會不見</p>
+    </div>
+    ${FB.err ? `<div class="banner warn"><span class="sp">${esc(FB.err)}</span></div>` : ''}
+    ${FB.auth ? `<button class="btn primary" data-a="googleLogin" style="height:52px;font-size:16px">用 Google 帳號登入</button>
+    <div style="display:flex;align-items:center;gap:10px" class="small"><i style="flex:1;height:1px;background:var(--line)"></i>或用 Email<i style="flex:1;height:1px;background:var(--line)"></i></div>
+    <div class="field"><label for="lg-email">Email</label><input id="lg-email" type="email" autocomplete="email" inputmode="email"></div>
+    <div class="field"><label for="lg-pw">密碼（至少 6 個字）</label><input id="lg-pw" type="password" autocomplete="current-password"></div>
+    ${EDITION === 'personal' ? `<button class="btn" data-a="emailLogin">登入</button>` : `<div class="grid2"><button class="btn" data-a="emailLogin">登入</button><button class="btn" data-a="emailSignup">註冊新帳號</button></div>`}
+    <button class="btn ghost small" data-a="resetPw" style="align-self:center">忘記密碼</button>` : `<p class="small" style="text-align:center">連線中…</p>`}
+    ${EDITION === 'personal' ? '<p class="small" style="text-align:center;margin:0">個人版只限擁有者登入</p>' : '<button class="btn ghost" data-a="browseDemo" style="color:var(--accent)">先看範例，不登入</button>'}
+  </div>`;
+}
+function render() {
+  if (V.needLogin) { painting = true; try { $('#app').innerHTML = pageLogin(); } finally { painting = false; } $('#nav').innerHTML = ''; $('#sheetRoot').innerHTML = ''; return; }
+  const a = acc(), m = compute(a);
+  let html = '';
+  if (V.page === 'stock') html = pageStock(a, m);
+  else if (V.page === 'accounts') html = pageAccounts(a, m);
+  else if (V.page === 'plan') html = pagePlan(a, m);
+  else html = ({ home: pageHome, ledger: pageLedger, hist: pageHist, cal: pageCal })[V.tab](a, m);
+  painting = true; try { $('#app').innerHTML = banner() + html; } finally { painting = false; }
+  renderNav();
+  if (V.sheet) renderSheet(); else $('#sheetRoot').innerHTML = '';
+}
+function banner() {
+  if (mode === 'demo') return `<div class="banner warn" style="margin-top:4px"><span class="sp"><b class="gold">範例資料</b>　可以隨意試記，但不會儲存。${FB.auth ? '登入後開始記自己的帳。' : '要開始記自己的帳，按右邊按鈕。'}</span><button class="btn small primary" data-a="${FB.auth ? 'showLogin' : 'startFresh'}">${FB.auth ? '登入' : '開始記我的帳'}</button></div>`;
+  if (mode === 'local') return `<div class="banner warn" style="margin-top:4px"><span class="sp"><b class="gold">只存在這台裝置</b>　目前連不到雲端儲存，請定期到帳戶頁匯出備份。</span></div>`;
+  return '';
+}
+function renderNav() {
+  const it = (tab, label, icon) => `<button data-a="tab" data-v="${tab}" ${V.tab === tab && !V.page ? 'aria-current="page"' : ''}>${ic(icon, V.tab === tab && !V.page ? 2 : 1.8)}${label}</button>`;
+  $('#nav').innerHTML = `<div class="in">${it('home', '總覽', 'home')}${it('ledger', '帳本', 'book')}<button class="plus" data-a="add" aria-label="記一筆">${ic('plus', 2.4)}</button>${it('hist', '股息', 'bars')}${it('cal', '行事曆', 'cal')}</div>`;
+}
+const topAcc = (a) => `<div class="acc-wrap"><button class="chip-acc" data-a="accMenu" aria-haspopup="listbox" aria-expanded="${!!V.accMenu}" aria-label="切換帳戶，目前為 ${esc(a.name)}"><span class="av">${esc(a.name.slice(0, 1))}</span>${esc(a.name)}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${ICON.down}</svg></button>${V.accMenu ? `<div class="acc-menu" role="listbox">${S.accounts.map(x => `<button role="option" aria-selected="${x.id === a.id}" data-a="pickAcc" data-v="${esc(x.id)}"><span class="av">${esc(x.name.slice(0, 1))}</span><span class="nm">${esc(x.name)}</span>${x.id === a.id ? '<span class="ck">✓</span>' : ''}</button>`).join('')}</div>` : ''}</div>`;
+const backBtn = (label) => `<button class="ibtn" data-a="back" aria-label="${label || '返回'}">${ic('back', 2)}</button>`;
+const kv = (k, v, c, s) => `<div class="kv"><span class="k">${k}</span><span class="v ${c || ''}">${v}</span>${s ? `<span class="s">${s}</span>` : ''}</div>`;
+const segBar = (items, cur, act, cols) => `<div class="seg" style="grid-template-columns:repeat(${cols || items.length},minmax(0,1fr))">${items.map(([id, l]) => `<button data-a="${act}" data-v="${id}" aria-pressed="${id === cur}">${l}</button>`).join('')}</div>`;
+
+/* ---------- 總覽 ---------- */
+function pageHome(a, m) {
+  const prog = S.settings.goal ? Math.min(1, Math.max(0, m.monthAvg / S.settings.goal)) : 0;
+  const yearsToGoal = planYears(m.mv, V.plan.m, m.mv ? m.div12 / m.mv : 0.05, V.plan.g / 100, true, S.settings.goal);
+  const freq = { 月配: 0, 雙月配: 0, 季配: 0, 半年配: 0, 年配: 0 };
+  m.holds.forEach(h => { if (freq[h.freq] != null) freq[h.freq]++; });
+  const pdate = m.holds.map(h => (S.stocks[h.code] || {}).pdate).filter(Boolean).sort().pop();
+  return `
+  <div class="top">${topAcc(a)}
+    <button class="ibtn" data-a="hide" aria-label="${S.settings.hide ? '顯示金額' : '隱藏金額'}">${ic(S.settings.hide ? 'eyeoff' : 'eye')}</button>
+    <button class="ibtn" data-a="go" data-v="accounts" aria-label="設定">${ic('gear')}</button>
+  </div>
+  <section class="hero">
+    <div><div class="lbl">總價值（股票市值）</div><div class="big">${money(m.mv)}</div><div class="lbl" style="font-size:12px">${pdate ? '股價 ' + roc(pdate) : '尚未有股價'}${m.todayPL ? `・今日 <span class="${m.todayPL > 0 ? 'upc' : 'downc'} num">${arrow(m.todayPL)}${money(m.todayPL, { plus: true })}</span>` : ''}</div></div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="hrow"><span>總成本</span><span class="num">${money(m.cost)}</span></div>
+      <div class="hrow"><span>未實現損益</span><span style="display:flex;gap:8px;align-items:center"><span class="pill ${cls(m.unreal)}">${arrow(m.unreal)}${pct(m.unrealRet)}</span><span class="num ${m.unreal > 0 ? 'upc' : m.unreal < 0 ? 'downc' : ''}">${money(m.unreal, { plus: true })}</span></span></div>
+      <div class="hrow"><span>已實現損益</span><span style="display:flex;gap:8px;align-items:center"><span class="pill ${cls(m.real)}">${arrow(m.real)}${pct(m.realRet)}</span><span class="num ${m.real > 0 ? 'upc' : m.real < 0 ? 'downc' : ''}">${money(m.real, { plus: true })}</span></span></div>
+      <div class="hrow"><span>本月可領</span><span class="num goldc">${money(m.thisM)}</span></div>
+      <div class="hrow"><span>下月可領</span><span class="num goldc">${money(m.nextM)}</span></div>
+    </div>
+    <div class="tiles">
+      <button class="tile" data-a="tab" data-v="hist"><span class="small">累計股息（最後股利）</span><span class="v gold">${money(m.netDiv)}</span><span class="small num">原始 ${money(m.origSum)}</span><span class="small num">利息 ${money(m.loanSum)}</span></button>
+      <button class="tile" data-a="tab" data-v="hist"><span class="small">領息次數</span><span class="v">${m.divCount} 次</span><span class="small">近 12 月股息 ${money(m.div12)}</span></button>
+    </div>
+  </section>
+  ${pendingCard(a, true)}
+  ${requestCard()}
+  <button class="card pad rowbtn" data-a="go" data-v="plan" style="display:flex;flex-direction:column;gap:8px">
+    <span style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b style="font-weight:500">財務自由進度</b><span class="small">今年淨股息月均 <b class="gold num" style="font-size:15px">${money(m.monthAvg)}</b> / 目標 ${money(S.settings.goal, { show: true })}</span></span>
+    <span class="bar"><span style="width:${(prog * 100).toFixed(1)}%"></span></span>
+    <span class="small">已達 ${grp(prog * 100, 1)}%${yearsToGoal != null ? `・每月投入 ${money(V.plan.m, { show: true })} 約 ${grp(yearsToGoal, 1)} 年達成` : ''} ›</span>
+  </button>
+  <div class="h2row"><h2>帳戶資金</h2><span class="small">含存入、出金、股息與利息</span></div>
+  <div class="card pad grid2">
+    ${kv('投資總額（存入−出金）', money(m.invest))}
+    ${kv('帳戶餘額', money(m.balance), '', m.balance < 0 ? '負數＝已動用質押借款' : '')}
+    ${kv('帳戶現值', money(m.value))}
+    ${kv('帳戶淨值', money(m.netValue), '', '扣除預估賣出費用')}
+    ${kv('股票損益', arrow(m.stockPL) + money(m.stockPL, { plus: true }), cls(m.stockPL), pct(m.stockRet) + '・年化 ' + pct(m.stockAnn))}
+    ${kv('總損益（含息）', arrow(m.total) + money(m.total, { plus: true }), cls(m.total), pct(m.totalRet) + '・年化 ' + pct(m.totalAnn))}
+  </div>
+  <div class="h2row"><h2>配息頻率</h2></div>
+  <div class="card" style="padding:14px 8px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));text-align:center">
+    ${Object.entries(freq).map(([k, n]) => `<div><div class="small">${k}</div><div class="num" style="font-weight:700;font-size:24px;color:${n ? 'var(--accent)' : 'var(--line)'}">${n}</div></div>`).join('')}
+  </div>
+  <div class="h2row"><h2>佔比分析</h2></div>
+  <div class="card pad" style="display:flex;flex-direction:column;gap:14px">
+    ${segBar([['div', '股息佔比'], ['cost', '投資佔比'], ['mv', '市值佔比']], V.metric, 'metric')}
+    ${donut(m)}
+  </div>
+  <div class="h2row"><h2>持股</h2><button class="btn small ghost" data-a="tab" data-v="ledger">看帳本 ›</button></div>
+  ${holdList(m.holds.slice(0, 6), m)}`;
+}
+function donut(m) {
+  let items;
+  if (V.metric === 'div') items = m.divs.filter(d => d.cash > 0).map(d => [d.code, d.cash]);
+  else if (V.metric === 'cost') items = m.holds.map(h => [h.code, h.cost]);
+  else items = m.holds.map(h => [h.code, h.mv]);
+  items.sort((x, y) => y[1] - x[1]);
+  if (items.length > 6) { const rest = items.slice(5).reduce((s, x) => s + x[1], 0); items = items.slice(0, 5).concat([['其他', rest]]); }
+  const total = items.reduce((s, x) => s + x[1], 0);
+  if (!total) return `<div class="empty">還沒有資料</div>`;
+  const C = 2 * Math.PI * 54; let accl = 0;
+  const cols = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6'];
+  const circles = items.map(([c, v], i) => { const len = C * v / total; const s = `<circle cx="70" cy="70" r="54" fill="none" stroke="var(${cols[i]})" stroke-width="22" stroke-dasharray="${len.toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-accl).toFixed(2)}" transform="rotate(-90 70 70)"/>`; accl += len; return s; }).join('');
+  const label = { div: '累計股息', cost: '持有成本', mv: '總市值' }[V.metric];
+  return `<div style="display:flex;align-items:center;gap:16px">
+    <div style="position:relative;width:140px;height:140px;flex:none"><svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="${label}佔比"><circle cx="70" cy="70" r="54" fill="none" stroke="var(--line2)" stroke-width="22"/>${circles}</svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><span class="small">${label}</span><span class="num" style="font-weight:600">${money(total)}</span></div></div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">${items.map(([c, v], i) => `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i style="width:10px;height:10px;border-radius:3px;background:var(${cols[i]});flex:none"></i><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b class="num" style="font-weight:600">${esc(c)}</b> ${esc(stockName(c))}</span><span class="num" style="font-weight:600">${grp(v / total * 100, 1)}%</span></div>`).join('')}</div></div>`;
+}
+function holdList(holds, m) {
+  if (!holds.length) return `<div class="list"><div class="empty">還沒有持股。按下方「＋」記第一筆買進。</div></div>`;
+  // 每檔持股一張獨立卡片：明顯的外框、左側損益色條、標題底色，卡片之間留較大間距
+  const dm = S.settings.plMode === 'div';
+  return `<div class="hold-list">${holds.map(h => { const pl = dm ? h.plD : h.pl, ret = dm ? h.retD : h.ret, ann = dm ? h.annD : h.ann; return `
+    <button class="hold-card rowbtn ${pl > 0 ? 'up' : pl < 0 ? 'down' : ''}" data-a="stock" data-v="${esc(h.code)}">
+      <span class="hold-head">
+        <span class="hold-title"><span class="hold-code num">${esc(h.code)}</span><span class="hold-name">${esc(h.name)}</span></span>
+        <span class="hold-price"><span class="s">現價</span><b class="num ${cls(h.chg)}">${grp(h.price, 2)}</b><span class="num ${cls(h.chg)}">${h.chg ? arrow(h.chg) + (h.chg > 0 ? '+' : '−') + grp(Math.abs(h.chg), 2) + '（' + pct(h.chg / (h.price - h.chg)) + '）' : '—'}</span></span>
+      </span>
+      <span class="hold-body">
+        <span class="kv"><span class="k">庫存（佔 ${grp(m.mv ? h.mv / m.mv * 100 : 0, 1)}%）</span><span class="num" style="font-weight:600">${grp(h.shares)} 股</span><span class="s num">市值 ${money(h.mv)}</span></span>
+        <span class="kv" style="align-items:center;text-align:center"><span class="k">${dm ? '損益（含配息）' : '損益試算'}</span><span class="num ${cls(pl)}" style="font-weight:700;font-size:16px">${money(pl, { plus: true })}</span><span class="s num">${dm ? '已領配息 ' + money(h.divRecv) : esc(h.freq || '未設定配息頻率')}</span></span>
+        <span class="kv" style="align-items:flex-end;text-align:right"><span class="k">報酬率</span><span class="num ${cls(pl)}" style="font-weight:700;font-size:16px">${arrow(pl)}${pct(ret)}</span><span class="s num">年化 ${pct(ann, 1)}</span></span>
+      </span>
+    </button>`; }).join('')}</div>`;
+}
+
+/* ---------- 帳本 ---------- */
+function divRecords(list, showCode) {
+  if (!list.length) return `<div class="list"><div class="empty">還沒有股利紀錄</div></div>`;
+  return `<div class="list">${list.map(t => t.type === 'stock' ? `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><div class="main"><span class="t">${showCode ? `<b class="num">${esc(t.code)}</b> ` + esc(stockName(t.code)) + '・' : ''}股票股利</span><span class="st num">${roc(t.date)}${t.auto ? '・自動入帳' : ''}</span></div><b class="num">+${grp(t.shares)} 股</b>${delBtn(t.id)}</div>` : `
+    <div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆" style="align-items:flex-start"><div class="main" style="gap:4px">
+      <span class="t">${showCode ? `<b class="num">${esc(t.code)}</b> ` + esc(stockName(t.code)) : '現金股利'}</span>
+      <span class="st num">${roc(t.date)}${t.shares ? '・' + grp(t.shares) + ' 股' : ''}${t.perShare ? ' × ' + t.perShare : ''}${t.auto ? '・自動入帳' : ''}${t.memo ? '・' + esc(t.memo) : ''}</span>
+      <span style="display:grid;grid-template-columns:1.2fr 1.1fr .7fr .7fr;gap:6px;margin-top:4px">
+        <span class="kv"><span class="k">最後股利金額</span><b class="num gold" style="font-size:16px">${money(t.amount - (t.interest || 0))}</b></span>
+        <span class="kv"><span class="k">原始股利金額</span><span class="num" style="font-weight:500">${money(origOf(t))}</span></span>
+        <span class="kv"><span class="k">匯費</span><span class="num" style="font-weight:500">${money(-(t.other || 0))}</span></span>
+        <span class="kv"><span class="k">利息</span><span class="num" style="font-weight:500">${money(-(t.interest || 0))}</span></span>
+      </span></div>${delBtn(t.id)}</div>`).join('')}</div>`;
+}
+function pageLedger(a, m) {
+  const L = (k, v, c, al) => `<div class="kv" style="text-align:${al || 'left'};align-items:${al === 'right' ? 'flex-end' : al === 'center' ? 'center' : 'flex-start'}"><span class="k">${k}</span><span class="v ${c || ''}" style="font-size:16px">${v}</span></div>`;
+  let sum = '', body = '';
+  if (V.ledger === 'cash') {
+    sum = L('累計存入', money(m.inSum)) + L('投資總額', money(m.invest), '', 'center') + L('出金', money(m.outSum), '', 'right');
+    const list = sortTx(a.txns.filter(t => ['in', 'out'].includes(t.type))).reverse();
+    const lab = { in: ['存入', 'var(--accent-soft)', 'var(--accent)'], out: ['出金', 'var(--sunk)', 'var(--ink)'], loan: ['利息', 'var(--gold-soft)', 'var(--gold)'] };
+    body = list.length ? `<div class="list">${list.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><span class="tag" style="background:${lab[t.type][1]};color:${lab[t.type][2]}">${lab[t.type][0]}</span><div class="main"><span class="t">${esc(t.memo || ({ in: '現金存入', out: '出金', loan: '利息' })[t.type])}</span><span class="st num">${roc(t.date)}</span></div><span class="num" style="font-weight:600">${t.type === 'in' ? '+' : '−'}${money(t.amount)}</span>${delBtn(t.id)}</div>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有存入或出金紀錄</div></div>`;
+  } else if (V.ledger === 'hold') {
+    const dm = S.settings.plMode === 'div', u = dm ? m.unreal + m.divHeld : m.unreal;
+    sum = (dm ? L('扣息後成本', money(m.cost - m.divHeld)) : L('持有成本', money(m.cost))) + L(dm ? '損益（含配息）' : '庫存損益', money(u, { plus: true }), cls(u), 'center') + L('報酬率', arrow(u) + pct(m.cost ? u / m.cost : 0), cls(u), 'right');
+    body = `<div class="seg pl-seg" role="group" aria-label="損益計算方式"><button data-a="plMode" data-v="raw" aria-pressed="${!dm}">未扣配息</button><button data-a="plMode" data-v="div" aria-pressed="${dm}">扣除已領配息</button></div>` + (m.todayPL ? `<div class="small" style="display:flex;justify-content:space-between;padding:0 4px"><span>今日損益 <b class="num ${cls(m.todayPL)}">${arrow(m.todayPL)}${money(m.todayPL, { plus: true })}（${pct(m.todayRet)}）</b></span></div>` : '') + holdList(m.holds, m);
+  } else if (V.ledger === 'real') {
+    const dm = S.settings.realMode === 'div', rv = r => r.pl + (dm ? r.div : 0), tot = m.real + (dm ? m.realDiv : 0);
+    sum = L('投資成本', money(m.realCost)) + L(dm ? '實收（含股利）' : '實收（未含股利）', money(tot, { plus: true }), cls(tot), 'center') + L('報酬率', arrow(tot) + pct(m.realCost ? tot / m.realCost : 0), cls(tot), 'right');
+    body = `<div class="seg pl-seg" role="group" aria-label="實現損益計算方式"><button data-a="realMode" data-v="raw" aria-pressed="${!dm}">未含股利</button><button data-a="realMode" data-v="div" aria-pressed="${dm}">含股利</button></div>` + (dm && m.realDiv ? `<div class="small" style="padding:0 4px">價差 ${money(m.real, { plus: true })} ＋ 持有期間股利 ${money(m.realDiv)}</div>` : '') +
+      (m.realList.length ? `<div class="hold-list">${m.realList.slice().sort((x, y) => (y.last || '').localeCompare(x.last || '')).map(r => { const v = rv(r); return `
+    <button class="hold-card rowbtn ${v > 0 ? 'up' : v < 0 ? 'down' : ''}" data-a="stock" data-v="${esc(r.code)}">
+      <span class="hold-head">
+        <span class="hold-title"><span class="hold-code num">${esc(r.code)}</span><span class="hold-name">${esc(stockName(r.code))}</span></span>
+        <span class="hold-price"><span class="s">賣出日</span><b class="num" style="font-size:14px">${roc(r.last)}</b><span class="s num">現賣均 ${grp(r.sellAmt / r.qty, 2)}／成本均 ${grp(r.cost / r.qty, 2)}</span></span>
+      </span>
+      <span class="hold-body">
+        <span class="kv"><span class="k">成交股數</span><span class="num" style="font-weight:600">${grp(r.qty)} 股</span><span class="s num">成本 ${money(r.cost)}</span></span>
+        <span class="kv" style="align-items:center;text-align:center"><span class="k">${dm ? '實收（含股利）' : '實收'}</span><span class="num ${cls(v)}" style="font-weight:700;font-size:16px">${money(v, { plus: true })}</span><span class="s num">${dm && r.div ? '股利 ' + money(r.div) : '費稅 ' + money(r.fee + r.tax)}</span></span>
+        <span class="kv" style="align-items:flex-end;text-align:right"><span class="k">報酬率</span><span class="num ${cls(v)}" style="font-weight:700;font-size:16px">${arrow(v)}${pct(r.cost ? v / r.cost : 0)}</span><span class="s num">${dm && r.div ? '費稅 ' + money(r.fee + r.tax) : '&nbsp;'}</span></span>
+      </span>
+    </button>`; }).join('')}</div>` : `<div class="list"><div class="empty">還沒有賣出紀錄</div></div>`);
+  } else {
+    sum = L('原始股利', money(m.origSum)) + L('匯費', money(-m.otherSum), '', 'center') + L('利息', money(-m.loanSum), '', 'center') + L('最後股利', money(m.netDiv), 'gold', 'right');
+    const pend = pendingDivs(a);
+    body = pendingCard(a) +
+      (m.divs.length ? `<div class="list"><div class="tbl h" style="grid-template-columns:1.3fr 1fr .8fr .55fr 1fr"><span>股票（次數）</span><span class="right">原始股利</span><span class="right">匯費</span><span class="right">利息</span><span class="right">最後股利</span></div>${m.divs.sort((x, y) => y.cash - x.cash).map(d => `<button class="tbl rowbtn" data-a="stock" data-v="${esc(d.code)}" style="grid-template-columns:1.3fr 1fr .8fr .55fr 1fr"><span style="display:flex;flex-direction:column;min-width:0"><b style="font-weight:600">${esc(d.code)}</b><span class="small" style="font-family:var(--f-body)">${esc(stockName(d.code))}（${d.n} 次${d.sh ? '・配股 ' + grp(d.sh) + ' 股' : ''}）</span></span><span class="right">${money(d.orig || d.cash)}</span><span class="right">${money(-(d.oth || 0))}</span><span class="right">${money(-d.int)}</span><span class="right gold" style="font-weight:600">${money(d.cash - d.int)}</span></button>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有股利紀錄</div></div>`) +
+      `<div class="h2row"><h2 style="font-size:15px">每筆股利</h2><span class="small">最後股利 = 原始股利 − 匯費等費用 − 利息・點一筆可修改</span></div>` + divRecords(sortTx(a.txns.filter(t => t.type === 'cash' || t.type === 'stock')).reverse(), true) +
+      (() => { const ln = sortTx(a.txns.filter(t => t.type === 'loan')).reverse(); return `<div class="h2row"><h2 style="font-size:15px">單獨記錄的利息</h2><span class="small">沒有股利的月份，從累計股息扣除</span></div>` + (ln.length ? `<div class="list">${ln.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><span class="tag" style="background:var(--gold-soft);color:var(--gold)">利息</span><div class="main"><span class="t">${esc(t.memo || '利息')}</span><span class="st num">${roc(t.date)}</span></div><b class="num">−${money(t.amount)}</b>${delBtn(t.id)}</div>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有利息紀錄</div></div>`); })() +
+      '';
+  }
+  return `<div class="top">${topAcc(a)}</div>
+    ${segBar([['cash', '帳戶交易'], ['hold', '庫存損益'], ['real', '實現損益'], ['div', '股票股利']], V.ledger, 'ledger')}
+    <div class="card pad ${V.ledger === 'div' ? 'grid4' : 'grid3'}">${sum}</div>${body}`;
+}
+function delBtn(id) {
+  const armed = V.armed === id;
+  return `<button class="btn small ${armed ? 'danger' : 'ghost'}" data-a="del" data-v="${id}" aria-label="刪除這筆">${armed ? '確定刪除' : '刪除'}</button>`;
+}
+
+/* ---------- 個股 ---------- */
+function pageStock(a, m) {
+  const code = V.code, st = S.stocks[code] || { name: code, events: [] };
+  const h = m.holds.find(x => x.code === code);
+  const txs = sortTx(a.txns.filter(t => t.code === code && (t.type === 'buy' || t.type === 'sell'))).reverse();
+  const cashTx = sortTx(a.txns.filter(t => t.code === code && t.type === 'cash'));
+  const cum = cashTx.reduce((s, t) => s + t.amount - (t.interest || 0), 0);
+  const last = cashTx[cashTx.length - 1];
+  const per = last ? last.perShare : 0;
+  const perYear = per * ({ 月配: 12, 雙月配: 6, 季配: 4, 半年配: 2, 年配: 1 }[st.freq] || 1);
+  const needSh = per ? Math.ceil(V.budget / (perYear / 12)) : 0;
+  const tname = { buy: '買進', sell: '賣出', cash: '現金股利', stock: '股票股利' };
+  const evs = (st.events || []).slice().sort((x, y) => x.ex < y.ex ? 1 : -1);
+  return `<div class="top">${backBtn()}<div style="flex:1;min-width:0"><div style="display:flex;gap:8px;align-items:baseline"><b class="num" style="font-size:18px">${esc(code)}</b><span style="font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(st.name || '')}</span></div></div></div>
+  <div class="card pad" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap"><span class="num ${cls(st.chg)}" style="font-weight:700;font-size:38px;line-height:1">${st.price != null ? grp(st.price, 2) : '—'}</span><span class="num ${cls(st.chg)}">${st.chg ? arrow(st.chg) + (st.chg > 0 ? '+' : '−') + grp(Math.abs(st.chg), 2) : ''}</span></div>
+    <div class="grid2">
+      <div class="field"><label for="s-price">現價（手動更新）</label><input id="s-price" class="num" type="number" step="0.01" inputmode="decimal" value="${st.price ?? ''}" data-f="price"></div>
+      <div class="field"><label for="s-freq">配息頻率</label><select id="s-freq" data-f="freq">${['', '月配', '雙月配', '季配', '半年配', '年配'].map(f => `<option value="${f}" ${f === (st.freq || '') ? 'selected' : ''}>${f || '未設定'}</option>`).join('')}</select></div>
+    </div>
+    <div class="small">${st.pdate ? '股價日期 ' + roc(st.pdate) + '・' : ''}<a href="https://tw.stock.yahoo.com/quote/${encodeURIComponent(code)}" target="_blank" rel="noopener">在 Yahoo 股市查價 ↗</a></div>
+  </div>
+  ${h ? `<div class="card pad grid2">
+    ${kv('庫存股數', sharesTxt(h.shares))}${kv('持有成本', money(h.cost))}
+    ${kv('成交均／成本均', grp(h.avgBuy, 2) + ' / ' + grp(h.avgCost, 2), '', '成本均已扣除這段持有領到的股息')}
+    ${kv('損益試算', arrow(h.pl) + money(h.pl, { plus: true }), cls(h.pl))}
+    ${kv('報酬率／年化', pct(h.ret) + ' / ' + pct(h.ann, 1), cls(h.pl))}
+    ${kv('報酬率（含息）', pct(h.cost ? (h.pl + h.divOnPos) / h.cost : 0), cls(h.pl + h.divOnPos))}
+  </div>` : `<div class="card pad small">目前沒有持股。</div>`}
+  <div class="h2row"><h2>股息記錄</h2><span class="small">每股現金（線）・除息股數（柱）</span></div>
+  <div class="card pad" style="display:flex;flex-direction:column;gap:12px">
+    ${divChart(cashTx.slice(-8))}
+    <div class="tiles"><div class="tile" style="background:var(--gold-soft)"><span class="small">累計最後股利</span><span class="v gold">${money(cum)}</span></div><div class="tile" style="background:var(--bg)"><span class="small">領息次數</span><span class="v">${cashTx.filter(divPaid).length} 次</span></div></div>
+  </div>
+  <div class="card pad" style="border:1.5px solid var(--accent);display:flex;flex-direction:column;gap:10px">
+    <b>投資預算計算</b>
+    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px">想每月從這檔領
+      <span class="field" style="padding:6px 10px;flex-direction:row;align-items:center;gap:4px"><span class="muted">$</span><input class="num" style="width:90px;text-align:right;font-weight:600" type="number" inputmode="numeric" value="${V.budget}" data-f="budget" aria-label="想每月領的金額"></span></label>
+    ${per ? `<div class="grid2" style="background:var(--bg);border-radius:12px;padding:10px 12px">${kv('需持有', grp(Math.ceil(needSh / 1000)) + ' 張', '', h ? (h.shares >= needSh ? '已有 ' + grp(Math.floor(h.shares / 1000)) + ' 張 ✓' : '還差 ' + grp(Math.ceil((needSh - h.shares) / 1000)) + ' 張') : '')}${kv('以現價需投入', money(needSh * (st.price || 0), { show: true }), '', `依最近每股 ${per} 元、${st.freq || '年配'}估算`)}</div>` : `<div class="small">有配息紀錄、並設定配息頻率後就能計算。</div>`}
+  </div>
+  <div class="h2row"><h2>除權息公告</h2><span class="small">發放日自動入帳</span></div>
+  <div class="list">
+    ${evs.length ? evs.map(e => { const c = divCalc(a, code, e); return `<div class="row"><div class="main"><span class="t num">除息 ${roc(e.ex)}・發放 ${e.pay ? roc(e.pay) : '未定'}</span><span class="st">${e.cash ? '每股 ' + e.cash + ' 元' : ''}${e.stock ? '・配股 ' + e.stock + ' 元' : ''}・最後購買日 ${md(prevWeekday(e.ex))}${e.auto ? '・自動取得' : ''}</span></div><div class="r"><b class="num gold">${c.sh ? money(c.net) : '—'}</b><span class="small num">${c.sh ? grp(c.sh) + ' 股' : '未持有'}</span></div>${delBtn('ev:' + e.id)}</div>`; }).join('') : `<div class="empty">還沒有公告。上線自動資料後會自己出現，現在可先手動新增。</div>`}
+    <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line2)">
+      <div class="grid2"><div class="field"><label for="ev-ex">除息（權）日</label><input id="ev-ex" type="date"></div><div class="field"><label for="ev-pay">發放日</label><input id="ev-pay" type="date"></div>
+      <div class="field"><label for="ev-cash">每股現金（元）</label><input id="ev-cash" class="num" type="number" step="0.0001" inputmode="decimal"></div><div class="field"><label for="ev-stock">每股股票（元）</label><input id="ev-stock" class="num" type="number" step="0.0001" inputmode="decimal" placeholder="0"></div></div>
+      <button class="btn" data-a="addEvent">新增除權息公告</button>
+    </div>
+  </div>
+  <div class="h2row"><h2>每筆股利</h2><span class="small">最後 = 原始 − 匯費 − 利息・點一筆可修改</span></div>
+  ${divRecords(sortTx(a.txns.filter(t => t.code === code && (t.type === 'cash' || t.type === 'stock'))).reverse(), false)}
+  <div class="h2row"><h2>交易紀錄</h2><span class="small">點一筆可修改</span></div>
+  <div class="list">${txs.length ? txs.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><div class="main"><span class="t">${tname[t.type] || t.type}${t.type === 'buy' || t.type === 'sell' ? ' ' + grp(t.shares) + ' 股 @ ' + grp(t.price, 2) : t.type === 'cash' ? ' ' + grp(t.shares) + ' 股 × ' + t.perShare : t.type === 'stock' ? ' ' + grp(t.shares) + ' 股' : ''}${t.auto ? ' <span class="small">（自動）</span>' : ''}</span><span class="st num">${roc(t.date)}${t.fee ? '・手續費 ' + money(t.fee, { show: true }) : ''}${t.tax ? '・證交稅 ' + money(t.tax, { show: true }) : ''}${t.nhi ? '・補充保費 ' + money(t.nhi, { show: true }) : ''}</span></div><b class="num ${t.type === 'cash' ? 'gold' : ''}">${t.type === 'buy' ? '−' + money(t.shares * t.price + (t.fee || 0)) : t.type === 'sell' ? '+' + money(t.shares * t.price - (t.fee || 0) - (t.tax || 0)) : t.type === 'cash' ? '+' + money(t.amount) : '+' + grp(t.shares) + ' 股'}</b>${delBtn(t.id)}</div>`).join('') : '<div class="empty">沒有紀錄</div>'}</div>
+  <div style="display:flex;gap:10px"><a class="btn" href="https://tw.stock.yahoo.com/quote/${encodeURIComponent(code)}" target="_blank" rel="noopener">看線圖</a><button class="btn primary" style="flex:1" data-a="add" data-v="buy" data-code="${esc(code)}">記一筆 ${esc(code)}</button></div>`;
+}
+function divChart(list) {
+  if (!list.length) return `<div class="empty" style="padding:16px">還沒有配息紀錄</div>`;
+  const W = 340, H = 170, L = 40, R = 8, T = 20, B = 40, n = list.length;
+  const maxP = Math.max(...list.map(t => t.perShare || 0)) || 1, maxS = Math.max(...list.map(t => t.shares || 0)) || 1;
+  const step = (W - L - R) / n, bw = Math.min(54, step * 0.6);
+  const yP = v => T + (H - T - B) * (1 - v / maxP), yS = v => T + 26 + (H - T - B - 26) * (1 - v / maxS);
+  let g = `<line x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}" stroke="var(--line)"/><line x1="${L}" x2="${W - R}" y1="${T}" y2="${T}" stroke="var(--line2)"/>`;
+  g += `<text x="${L - 6}" y="${T + 4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="Outfit">${maxP}</text><text x="${L - 6}" y="${H - B + 4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="Outfit">0</text>`;
+  const pts = [];
+  list.forEach((t, i) => {
+    const cx = L + step * i + step / 2, y = yS(t.shares);
+    g += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - B - y).toFixed(1)}" rx="4" fill="var(${i === n - 1 ? '--gold' : '--gold-bar'})"/>`;
+    g += `<text x="${cx.toFixed(1)}" y="${H - B + 14}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="Outfit">${md(t.date)}</text>`;
+    if (n <= 6) g += `<text x="${cx.toFixed(1)}" y="${H - B + 27}" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="Outfit">${grp(t.shares / 1000, t.shares % 1000 ? 1 : 0)}張</text>`;
+    pts.push([cx, yP(t.perShare || 0)]);
+  });
+  g += `<path d="${pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>`;
+  pts.forEach(p => { g += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4" fill="var(--accent)"/>`; });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="近 ${n} 次配息的每股現金與除息股數">${g}</svg>`;
+}
+
+/* ---------- 股息歷程 ---------- */
+function monthly(a) {
+  const yrs = {};
+  const Y = y => yrs[y] || (yrs[y] = { div: Array(12).fill(0), loan: Array(12).fill(0), inv: Array(12).fill(0), fee: Array(12).fill(0), gain: Array(12).fill(0), count: 0, costEnd: Array(12).fill(null) });
+  const pos = {}; let cost = 0;
+  for (const t of sortTx(a.txns)) {
+    const y = t.date.slice(0, 4), mi = +t.date.slice(5, 7) - 1, o = Y(y);
+    const p = t.code ? (pos[t.code] || (pos[t.code] = { sh: 0, cost: 0 })) : null;
+    if (t.type === 'cash') { o.div[mi] += origOf(t); o.loan[mi] += (t.interest || 0) + (t.other || 0); o.count++; }
+    if (t.type === 'loan') o.loan[mi] += t.amount;
+    if (t.type === 'buy') { const c = t.shares * t.price + (t.fee || 0); o.inv[mi] += c; o.fee[mi] += t.fee || 0; p.sh += t.shares; p.cost += c; cost += c; }
+    if (t.type === 'sell') { const sh = Math.min(t.shares, p.sh), avg = p.sh ? p.cost / p.sh : 0; o.fee[mi] += (t.fee || 0) + (t.tax || 0); o.gain[mi] += sh * t.price - (t.fee || 0) - (t.tax || 0) - avg * sh; p.cost -= avg * sh; p.sh -= sh; cost -= avg * sh; }
+    if (t.type === 'stock') p.sh += t.shares;
+    o.costEnd[mi] = cost;
+  }
+  return yrs;
+}
+function pageHist(a, m) {
+  const yrs = monthly(a), years = Object.keys(yrs).sort().reverse();
+  const today = todayISO(), cy = today.slice(0, 4), cm = +today.slice(5, 7) - 1;
+  let body = '';
+  if (!years.length) body = `<div class="list"><div class="empty">還沒有紀錄</div></div>`;
+  else if (V.hist === 'chart') {
+    body = years.map((y, yi) => {
+      const o = yrs[y], tot = o.div.reduce((s, v) => s + v, 0), loan = o.loan.reduce((s, v) => s + v, 0);
+      const prev = yrs[String(y - 1)], ptot = prev ? prev.div.reduce((s, v) => s + v, 0) : 0;
+      const months = y === cy ? cm + 1 : 12, max = Math.max(...o.div) || 1;
+      const cmp = ptot ? `股息較 ${y - 1} 年 ${arrow(tot - ptot)}${pct((tot - ptot) / ptot, 1, false)}` : '第一年';
+      return `<section class="card pad" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;justify-content:space-between;gap:8px"><div><div class="num" style="font-weight:700;font-size:24px">${y}</div><div class="small"><span class="${ptot ? cls(tot - ptot) : ''}">${cmp}</span></div></div>
+        <div style="text-align:right"><div class="small">累計最後股利</div><div class="num gold" style="font-weight:700;font-size:24px">${money(tot - loan)}</div><div class="small num">原始 ${money(tot)} − 匯費・利息 ${money(loan)}</div></div></div>
+        <div class="hbars">${o.div.map((v, i) => `<div><span>${v ? (v >= 10000 ? grp(v / 10000, 1) + '萬' : grp(v / 1000, 1) + 'k') : ''}</span><i class="${y === cy && i === cm ? 'cur' : ''}" style="height:${Math.round(108 * v / max)}px"></i></div>`).join('')}</div>
+        <div class="mlabels">${Array.from({ length: 12 }, (_, i) => `<span>${i + 1}</span>`).join('')}</div>
+        <div style="background:var(--bg);border-radius:10px;padding:10px 12px;font-size:14px;font-weight:500">領息 <b class="num">${o.count}</b> 次　|　淨月均 <b class="num gold">${money((tot - loan) / months)}</b></div>
+      </section>`;
+    }).join('');
+  } else {
+    const y = years[0], o = yrs[y], tot = o.div.reduce((s, v) => s + v, 0), loan = o.loan.reduce((s, v) => s + v, 0);
+    const lastM = y === cy ? cm : 11;
+    let rows = '';
+    for (let i = lastM; i >= 0; i--) {
+      const net = o.div[i] - o.loan[i];
+      if (!o.div[i] && !o.loan[i] && !o.inv[i] && !o.fee[i] && !o.gain[i] && i !== lastM) continue;
+      let costEnd = null; for (let j = i; j >= 0 && costEnd == null; j--) costEnd = o.costEnd[j];
+      rows += `<div class="tl"><div class="m">${i + 1}月<i></i></div><div class="card pad c">
+        <div class="lr" style="border-bottom:1px solid var(--line2);padding-bottom:8px"><span style="color:var(--ink);font-weight:700;font-size:15px">${i === cm && y === cy ? '總市值' : '月底總成本'}</span><b class="num" style="font-weight:700;font-size:17px;color:var(--accent)">${money(i === cm && y === cy ? m.mv : (costEnd || 0))}</b></div>
+        ${i === cm && y === cy ? `<div class="lr"><span>總成本</span><b>${money(m.cost)}</b></div>` : ''}
+        <div class="lr"><span>價差獲利</span><b class="${cls(o.gain[i])}">${money(o.gain[i], { plus: true })}</b></div>
+        <div class="lr"><span>手續費＋稅</span><b>${money(o.fee[i])}</b></div>
+        <div class="lr"><span>原始股利</span><b>${money(o.div[i])}</b></div>
+        <div class="lr"><span>匯費・利息</span><b>${money(-o.loan[i])}</b></div>
+        <div class="lr" style="font-weight:500"><span style="color:var(--ink)">最後股利</span><b class="${net < 0 ? 'down' : 'gold'}" style="font-weight:700">${money(net)}</b></div>
+        <div class="lr"><span>本月投入</span><b>${money(o.inv[i])}</b></div></div></div>`;
+    }
+    body = `<div style="display:flex;align-items:center;gap:10px"><i style="flex:1;height:1px;background:var(--line)"></i><span style="text-align:center"> <b>${y} 累計最後股利 <span class="num gold">${money(tot - loan)}</span></b><br><span class="small num">原始 ${money(tot)} − 匯費・利息 ${money(loan)}</span></span><i style="flex:1;height:1px;background:var(--line)"></i></div>${rows}`;
+  }
+  return `<div class="top"><h1>股息歷程</h1><button class="btn small ghost" data-a="go" data-v="accounts">${esc(a.name)} ▾</button></div>
+    ${segBar([['list', '明細'], ['chart', '圖表']], V.hist, 'hist')}${body}`;
+}
+
+/* ---------- 行事曆 ---------- */
+function calEvents(a, m) {
+  // 只放持有股票的除權息日與配發日；金額為原始股利（配發現金，未扣匯費）
+  const out = [], today = todayISO();
+  for (const code in S.stocks) {
+    const st = S.stocks[code], hold = m.holds.find(h => h.code === code);
+    for (const e of st.events) {
+      const sh = e.ex <= today ? sharesAt(a, code, e.ex) : (hold ? hold.shares : 0);
+      if (!(sh > 0)) continue;
+      const gross = Math.round(sh * (e.cash || 0));
+      const fee = gross >= 20000 && S.settings.nhiOn ? Math.round(gross * 0.0211) : 0;
+      const rec = a.txns.find(t => t.type === 'cash' && t.ev === e.id);
+      const amt = rec ? origOf(rec) : gross;
+      const stockSh = Math.floor(sh * (e.stock || 0) / 10);
+      const it = { code, e, sh, amt, stockSh, done: !!rec };
+      out.push(Object.assign({ type: 'ex', date: e.ex }, it));
+      if (e.pay) out.push(Object.assign({ type: 'pay', date: e.pay }, it));
+    }
+  }
+  return out.sort((x, y) => x.date < y.date ? -1 : x.date > y.date ? 1 : 0);
+}
+function calInfo(e) {
+  const per = [e.e.cash ? '每股現金 ' + e.e.cash + ' 元' : '', e.e.stock ? '每股股票 ' + e.e.stock + ' 元' : ''].filter(Boolean).join('・');
+  return per + (e.stockSh ? '・配股 ' + grp(e.stockSh) + ' 股' : '');
+}
+function pageCal(a, m) {
+  const evs = calEvents(a, m), today = todayISO();
+  const TY = { ex: ['除權息日', 'var(--ex)'], pay: ['配發日', 'var(--pay)'] };
+  let body;
+  if (V.calView === 'cal') {
+    const [yy, mm] = V.calMonth.split('-').map(Number);
+    const first = new Date(yy, mm - 1, 1), startDow = first.getDay(), dim = new Date(yy, mm, 0).getDate();
+    const byDate = {}; evs.forEach(e => { if (V.calOn[e.type]) (byDate[e.date] = byDate[e.date] || []).push(e); });
+    let cells = '';
+    for (let i = 0; i < startDow; i++) cells += `<span class="d other"><b></b></span>`;
+    for (let d = 1; d <= dim; d++) {
+      const iso = `${yy}-${String(mm).padStart(2, '0')}-${String(d).padStart(2, '0')}`, list = byDate[iso] || [];
+      const types = [...new Set(list.map(e => e.type))];
+      cells += `<button class="d ${iso === today ? 'today' : ''} ${iso === V.calSel ? 'sel' : ''}" data-a="calSel" data-v="${iso}" aria-label="${mm}月${d}日${list.length ? '，有 ' + list.length + ' 個事件' : ''}"><b>${d}</b><span class="dots">${types.map(t => `<i style="background:${TY[t][1]}"></i>`).join('')}</span></button>`;
+    }
+    const sel = V.calSel && V.calSel.slice(0, 7) === V.calMonth ? (byDate[V.calSel] || []) : evs.filter(e => e.date >= today && V.calOn[e.type]).slice(0, 8);
+    body = `<div class="card" style="padding:6px 8px 12px">
+      <div style="display:flex;align-items:center;justify-content:space-between"><button class="ibtn" data-a="calMove" data-v="-1" aria-label="上個月">${ic('back', 2)}</button><b class="num" style="font-size:17px">${yy} 年 ${mm} 月</b><button class="ibtn" data-a="calMove" data-v="1" aria-label="下個月">${ic('right', 2)}</button></div>
+      <div class="cal small" style="padding:2px 0 6px"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+      <div class="cal">${cells}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 4px 0">${Object.entries(TY).map(([k, [l, c]]) => `<button class="btn small" data-a="calOn" data-v="${k}" aria-pressed="${!!V.calOn[k]}" style="gap:8px;${V.calOn[k] ? '' : 'opacity:.55'}"><i style="width:14px;height:14px;border-radius:4px;background:${V.calOn[k] ? c : 'transparent'};border:1.5px solid ${c};display:grid;place-items:center;color:#fff;font-size:10px;font-style:normal">${V.calOn[k] ? '✓' : ''}</i>${l}</button>`).join('')}</div>
+    </div>
+    <div class="h2row"><h2 style="font-size:16px">${V.calSel && V.calSel.slice(0, 7) === V.calMonth ? roc(V.calSel) : '接下來'}</h2></div>
+    ${evList(sel, TY)}`;
+  } else {
+    const up = evs.filter(e => e.date >= today);
+    body = up.length ? `<div style="display:flex;flex-direction:column;gap:8px">${up.slice(0, 12).map(e => { const n = daysBetween(today, e.date); return `<div class="card pad" style="display:flex;align-items:center;gap:14px"><div style="width:64px;height:64px;border-radius:16px;background:var(--sunk);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;color:${TY[e.type][1]}"><b class="num" style="font-size:26px;line-height:1">${n}</b><span style="font-size:11px">${n ? '天' : '今天'}</span></div><div style="flex:1;min-width:0"><div style="font-weight:500"><b class="num">${esc(e.code)}</b> ${TY[e.type][0]}</div><div class="small">${roc(e.date)}・${esc(stockName(e.code))}・${calInfo(e)}</div><div class="small">原始股利 <b class="num gold">${money(e.amt)}</b>${e.done ? '' : '（預估）'}</div></div></div>`; }).join('')}</div>` : `<div class="list"><div class="empty">持股近期沒有除權息或配發</div></div>`;
+  }
+  return `<div class="top"><h1>股息日曆</h1></div>${segBar([['cal', '股息日曆'], ['count', '倒數日']], V.calView, 'calView')}${body}`;
+}
+function evList(list, TY) {
+  if (!list.length) return `<div class="list"><div class="empty">沒有事件</div></div>`;
+  return `<div class="list">${list.map(e => `<button class="row rowbtn" data-a="stock" data-v="${esc(e.code)}"><div style="width:40px;text-align:center"><b class="num" style="font-size:17px">${+e.date.slice(8)}</b><div class="small">${+e.date.slice(5, 7)}月</div></div><div class="main"><span class="t"><b class="num">${esc(e.code)}</b> ${esc(stockName(e.code))}</span><span class="st"><span style="color:#fff;background:${TY[e.type][1]};border-radius:4px;padding:0 6px;font-size:11px;margin-right:6px">${TY[e.type][0]}</span>${calInfo(e)}</span></div><span style="display:flex;flex-direction:column;align-items:flex-end"><span class="small">原始股利${e.done ? '' : '（預估）'}</span><b class="num gold">${money(e.amt)}</b></span></button>`).join('')}</div>`;
+}
+
+/* ---------- 帳戶與設定 ---------- */
+function pageAccounts(a0, m0) {
+  const accRows = S.accounts.map(a => {
+    const open = V.openAcc === a.id, m = open ? compute(a) : null, cur = a.id === S.cur;
+    return `<div class="card" style="border:1.5px solid ${cur ? 'var(--accent)' : 'transparent'};overflow:hidden">
+      <button class="row rowbtn" data-a="openAcc" data-v="${a.id}" aria-expanded="${open}"><span class="av" style="width:36px;height:36px;font-size:14px;${cur ? '' : 'background:var(--accent-soft);color:var(--accent)'}">${esc(a.name.slice(0, 1))}</span><div class="main"><span class="t" style="font-weight:700">${esc(a.name)}</span><span class="st">${cur ? '目前使用中・' : ''}${a.txns.length} 筆紀錄</span></div><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'}"/></svg></button>
+      ${open ? `<div style="padding:12px 16px 14px;border-top:1px solid var(--line2);display:flex;flex-direction:column;gap:12px">
+        <div class="grid2">
+          ${kv('投資總額', money(m.invest))}${kv('帳戶餘額', money(m.balance) + (m.invest ? `<span class="small">（${pct(m.balance / m.invest, 2, false)}）</span>` : ''))}
+          ${kv('股票市值', money(m.mv))}${kv('帳戶現值', money(m.value))}
+          ${kv('累計最後股利', money(m.netDiv), 'gold')}${kv('帳戶淨值', money(m.netValue))}
+          ${kv('股票損益', money(m.stockPL, { plus: true }), cls(m.stockPL))}${kv('報酬率／年化', pct(m.stockRet) + ' / ' + pct(m.stockAnn, 1), cls(m.stockPL))}
+          ${kv('總損益（含息）', money(m.total, { plus: true }), cls(m.total))}${kv('含息報酬率／年化', pct(m.totalRet) + ' / ' + pct(m.totalAnn, 1), cls(m.total))}
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="n-${a.id}">帳戶名稱</label><input id="n-${a.id}" value="${esc(a.name)}" maxlength="20" data-f="accName" data-id="${a.id}"></div>
+          <div class="field"><label for="d-${a.id}">手續費折數（0.6＝6 折）</label><input id="d-${a.id}" class="num" type="number" step="0.01" min="0.1" max="1" value="${a.disc}" data-f="accDisc" data-id="${a.id}"></div>
+          <div class="field"><label for="mi-${a.id}">最低手續費</label><input id="mi-${a.id}" class="num" type="number" min="0" value="${a.min}" data-f="accMin" data-id="${a.id}"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${cur ? '' : `<button class="btn small primary" data-a="setCur" data-v="${a.id}">設為目前</button>`}<button class="btn small" data-a="tabAcc" data-v="${a.id}">打開帳本</button>${S.accounts.length > 1 ? `<button class="btn small ${V.armed === 'acc:' + a.id ? 'danger' : 'ghost'}" data-a="del" data-v="acc:${a.id}">${V.armed === 'acc:' + a.id ? '確定刪除帳戶與 ' + a.txns.length + ' 筆紀錄' : '刪除帳戶'}</button>` : ''}</div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+  const sw = (f, on, label, sub) => `<div class="row"><div class="main"><span style="font-size:15px">${label}</span>${sub ? `<span class="st">${sub}</span>` : ''}</div><button class="switch" role="switch" aria-checked="${!!on}" aria-label="${label}" data-a="toggle" data-v="${f}"></button></div>`;
+  return `<div class="top">${backBtn('返回')}<h1>帳戶與設定</h1></div>
+    <p class="small" style="margin:0 4px">每個帳戶分開計算。點帳戶展開明細與設定，點「設為目前」切換整個 App 顯示的帳戶。</p>
+    <div style="display:flex;flex-direction:column;gap:8px">${accRows}</div>
+    <div style="display:flex;gap:8px"><div class="field" style="flex:1"><label for="newAcc">新帳戶名稱</label><input id="newAcc" maxlength="20" placeholder="例：黃爸爸、馬爹爹"></div><button class="btn primary" data-a="addAcc" style="align-self:stretch;height:auto">新增帳戶</button></div>
+    ${sharedListCard()}
+    <div class="h2row"><h2>設定</h2></div>
+    <div class="list">
+      <div class="row"><div class="main"><span style="font-size:15px">每月股息目標</span></div><input class="num" style="width:110px;text-align:right;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card)" type="number" inputmode="numeric" value="${S.settings.goal}" data-f="goal" aria-label="每月股息目標"></div>
+      <div class="row"><div class="main"><span style="font-size:15px">股利匯費</span><span class="st">自動入帳時扣除</span></div><input class="num" style="width:80px;text-align:right;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card)" type="number" inputmode="numeric" value="${S.settings.remit}" data-f="remit" aria-label="股利匯費"></div>
+      <div class="row"><div class="main"><span style="font-size:15px">股利入帳方式</span><span class="st">${S.settings.divMode === 'auto' ? '發放日自動入帳（利息需事後補填）' : '公告後列入「待確認」，你填利息後按完成入帳'}</span></div><button class="btn small" data-a="divMode">${S.settings.divMode === 'auto' ? '自動入帳' : '待確認'}</button></div>
+      ${sw('nhiOn', S.settings.nhiOn, '扣二代健保補充保費', '單筆股利滿 $20,000 扣 2.11%')}
+      ${sw('hide', S.settings.hide, '隱藏金額', '在人多的地方打開 App 時使用')}
+      <div class="row"><div class="main"><span style="font-size:15px">股價與除權息資料</span><span class="st">${MARKET ? '每個交易日 15:00 從 Yahoo股市自動更新・最後更新 ' + esc(MARKET.updated || MARKET.date || '') : '每個交易日 15:00 從 Yahoo股市自動更新（尚未收到第一次資料）'}</span></div>${window.APP_REPO ? `<a class="btn small" href="https://github.com/${esc(window.APP_REPO)}/actions" target="_blank" rel="noopener">立即更新</a>` : ''}</div>
+      ${FB.user ? `<div class="row"><div class="main"><span style="font-size:15px">登入帳號</span><span class="st">${esc(FB.user.email || FB.user.displayName || '')}・${EDITION === 'personal' ? '個人版' : '公開版'}</span></div><button class="btn small ${V.armed === 'logout' ? 'danger' : ''}" data-a="logout">${V.armed === 'logout' ? '確定登出' : '登出'}</button></div>` : ''}
+      <div class="row"><div class="main"><span style="font-size:15px">資料備份</span><span class="st">${mode === 'saved' ? (store && store.kind === 'fb' ? '已存在雲端，換手機登入同一個帳號就看得到' : '已存在你的 claude.ai 帳號，換手機也看得到') : mode === 'local' ? '只存在這台裝置' : '範例模式不儲存'}</span></div><button class="btn small" data-a="export">匯出</button><button class="btn small" data-a="import">匯入</button></div>
+    </div>
+    ${mode === 'demo' ? `<button class="btn primary" data-a="startFresh">清除範例，開始記我的帳</button>` : ''}`;
+}
+
+/* ---------- 財務自由計畫 ---------- */
+function planYears(P, M, yld, g, re, goal) {
+  if (!yld || !goal) return null;
+  const my = yld / 12, mg = Math.pow(1 + g, 1 / 12) - 1; let a = P;
+  for (let i = 1; i <= 600; i++) { const d = a * my; a = a * (1 + mg) + M + (re ? d : 0); if (a * my >= goal) return i / 12; }
+  return null;
+}
+function pagePlan(a, m) {
+  const yldDef = m.mv && m.div12 ? m.div12 / m.mv * 100 : 5;
+  const y = V.plan.y != null ? V.plan.y : +yldDef.toFixed(2);
+  const P = m.mv, M = V.plan.m, g = V.plan.g / 100, re = V.plan.re, goal = S.settings.goal, yld = y / 100;
+  const yrs = planYears(P, M, yld, g, re, goal);
+  const span = Math.min(40, Math.max(10, Math.ceil((yrs || 30) + 2)));
+  const my = yld / 12, mg = Math.pow(1 + g, 1 / 12) - 1; let A = P; const pts = [A * my];
+  for (let i = 1; i <= span * 12; i++) { const d = A * my; A = A * (1 + mg) + M + (re ? d : 0); if (i % 12 === 0) pts.push(A * my); }
+  const W = 340, H = 180, L = 36, R = 8, T = 12, B = 26, top = Math.max(goal * 1.2, Math.max(...pts)) || 1;
+  const x = i => L + (W - L - R) * i / span, yy = v => T + (H - T - B) * (1 - v / top);
+  const line = pts.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + yy(v).toFixed(1)).join(' ');
+  const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="每月股息預估曲線"><line x1="${L}" x2="${W - R}" y1="${yy(goal)}" y2="${yy(goal)}" stroke="var(--gold)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="${L - 4}" y="${yy(goal) + 3}" text-anchor="end" font-size="10" fill="var(--gold)" font-family="Outfit">${grp(goal / 10000, goal % 10000 ? 1 : 0)}萬</text><line x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}" stroke="var(--line)"/><path d="${line} L${x(span)} ${H - B} L${L} ${H - B} Z" fill="var(--accent)" fill-opacity=".12"/><path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>${yrs != null ? `<circle cx="${x(yrs).toFixed(1)}" cy="${yy(goal).toFixed(1)}" r="5" fill="var(--gold)"/>` : ''}<text x="${L}" y="${H - 8}" font-size="10" fill="var(--muted)" font-family="Outfit">今年</text><text x="${W - R}" y="${H - 8}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="Outfit">${span} 年後</text></svg>`;
+  return `<div class="top">${backBtn()}<h1>財務自由計畫</h1></div>
+    <section class="hero"><span class="lbl">照這個速度，每月領 ${money(goal, { show: true })} 股息</span><span style="display:flex;align-items:baseline;gap:8px"><span class="big goldc">${yrs != null ? grp(yrs, 1) : '50+'}</span><span>年後達成</span></span><span class="lbl">${yrs != null ? '約民國 ' + (+todayISO().slice(0, 4) - 1911 + Math.ceil(yrs)) + ' 年・' : ''}需要資產約 ${money(goal * 12 / (yld || 1), { show: true })}</span></section>
+    <div class="card pad" style="display:flex;flex-direction:column;gap:10px">
+      <span class="small">每月投入</span>
+      ${segBar([[5000, '5千'], [10000, '1萬'], [20000, '2萬'], [30000, '3萬']].map(([v, l]) => [String(v), l]), String(M), 'planM', 4)}
+      <div class="grid3">
+        <div class="field"><label for="p-m">自訂每月</label><input id="p-m" class="num" type="number" inputmode="numeric" value="${M}" data-f="planM"></div>
+        <div class="field"><label for="p-y">殖利率 %</label><input id="p-y" class="num" type="number" step="0.1" value="${y}" data-f="planY"></div>
+        <div class="field"><label for="p-g">股價年成長 %</label><input id="p-g" class="num" type="number" step="0.1" value="${V.plan.g}" data-f="planG"></div>
+      </div>
+      <div class="row" style="padding:4px 0"><div class="main"><span>股息再投入</span><span class="st">目前資產 ${money(P)}・殖利率預設用近 12 月股息計算</span></div><button class="switch" role="switch" aria-checked="${re}" aria-label="股息再投入" data-a="planRe"></button></div>
+    </div>
+    <div class="card pad"><div style="display:flex;justify-content:space-between;font-size:13px;padding-bottom:6px"><b style="font-weight:500">每月股息成長</b><span class="muted">目標線 ${money(goal, { show: true })}</span></div>${svg}</div>
+    <p class="small" style="margin:0 4px">試算假設殖利率與股價成長每年固定，未計手續費、稅與通膨，只是方向參考。</p>`;
+}
+
+/* ================= 記一筆 (bottom sheet) ================= */
+const TYPES = [['buy', '買進'], ['sell', '賣出'], ['div', '配息／配股'], ['loan', '利息'], ['in', '存入'], ['out', '出金']];
+const GROUPS = { money: ['資金', ['in', 'out']], trade: ['股票交易', ['buy', 'sell']], div: ['股利', ['div']] };
+const groupOf = t => Object.keys(GROUPS).find(g => GROUPS[g][1].includes(t)) || 'trade';
+function contextType() {
+  if (V.page === 'stock') return 'buy';
+  if (V.page) return 'buy';
+  if (V.tab === 'ledger') return ({ cash: 'in', hold: 'buy', real: 'sell', div: 'div' })[V.ledger];
+  if (V.tab === 'hist' || V.tab === 'cal') return 'div';
+  return 'buy';
+}
+function openSheet(type, code) {
+  const a = acc(), m = compute(a);
+  V.sheet = { type: type || contextType(), accId: a.id, code: code || (m.holds[0] && m.holds[0].code) || '', date: todayISO(), unit: 'lot', feeTouched: false, taxTouched: false, rate: null, f: {}, filledFor: null, cashTouched: false, sshTouched: false, otherTouched: false };
+  render();
+}
+function openEdit(id) {
+  const a = acc(), t = a.txns.find(x => x.id === id); if (!t) return;
+  const sh = { type: t.type, accId: a.id, code: t.code || '', date: t.date, unit: 'lot', feeTouched: false, taxTouched: false, rate: null, f: { memo: t.memo || '' }, filledFor: null, cashTouched: false, sshTouched: false, otherTouched: false, editId: id, editAcc: a.id, keepEv: t.ev };
+  if (t.type === 'buy' || t.type === 'sell') {
+    sh.unit = t.shares % 1000 === 0 ? 'lot' : 'sh'; sh.f.qty = String(sh.unit === 'lot' ? t.shares / 1000 : t.shares); sh.f.price = String(t.price);
+    sh.feeTouched = true; sh.f.fee = String(t.fee || 0); if (t.type === 'sell') { sh.taxTouched = true; sh.f.tax = String(t.tax || 0); }
+  } else if (t.type === 'cash' || t.type === 'stock') {
+    sh.type = 'div'; sh.filledFor = t.code; if (t.shares) sh.f.held = String(t.shares);
+    if (t.type === 'cash') { sh.f.per = t.perShare != null ? String(t.perShare) : ''; sh.f.perStock = ''; sh.cashTouched = true; sh.f.cash = String(origOf(t)); sh.otherTouched = true; sh.f.other = String(t.other || 0); sh.f.interest = t.interest ? String(t.interest) : ''; }
+    else { delete sh.f.held; sh.f.per = ''; sh.f.perStock = t.perShare != null ? String(t.perShare) : ''; sh.sshTouched = true; sh.f.stockSh = String(t.shares); sh.cashTouched = true; sh.f.cash = ''; }
+  } else sh.f.amount = String(t.amount);
+  V.sheet = sh; render();
+}
+function sheetAcc() { return S.accounts.find(x => x.id === V.sheet.accId) || acc(); }
+function divPrefill(a, sh) { // 查詢／試算股利: fill per-share amounts from the latest unrecorded announcement
+  const ev = findEvent(sh.code, a); if (!ev) return null;
+  const c = divCalc(a, sh.code, ev); if (!c.sh) return null;
+  sh.f.per = String(ev.cash || ''); sh.f.perStock = String(ev.stock || ''); delete sh.f.held;
+  delete sh.f.cash; delete sh.f.stockSh; delete sh.f.other; sh.cashTouched = sh.sshTouched = sh.otherTouched = false;
+  sh.date = ev.ex;
+  sh.ev = ev; sh.filledFor = sh.code;
+  return { ev, c };
+}
+function divForm(a, sh) { // live dividend math from 庫存 × 每股股利; every field can be overridden
+  const f = sh.f, m = compute(a);
+  const curHeld = sh.date && sh.date <= todayISO() ? sharesAt(a, sh.code, sh.date) : ((m.holds.find(h => h.code === sh.code) || {}).shares || 0);
+  const held = f.held != null && f.held !== '' ? num(f.held) : curHeld;
+  const per = num(f.per), perStock = num(f.perStock);
+  const cash = sh.cashTouched ? num(f.cash) : Math.round(held * per);
+  const stockSh = sh.sshTouched ? Math.round(num(f.stockSh)) : Math.floor(held * perStock / 10);
+  const autoOther = cash > 0 ? (S.settings.nhiOn && cash >= 20000 ? Math.round(cash * 0.0211) : 0) + S.settings.remit : 0;
+  const other = sh.otherTouched ? num(f.other) : autoOther;
+  const interest = num(f.interest), orig = cash;
+  return { curHeld, held, per, perStock, cash, stockSh, other, interest, orig, fin: cash - other - interest };
+}
+function renderSheet(only) {
+  const sh = V.sheet, t = sh.type, f = sh.f, a = sheetAcc(), m = compute(a);
+  const codes = Object.keys(S.stocks).sort();
+  const field = (id, label, inner, extra) => `<div class="field ${extra || ''}"><label for="${id}">${label}</label>${inner}</div>`;
+  const inp = (id, key, val, attrs) => `<input id="${id}" value="${esc(val ?? '')}" data-s="${key}" ${attrs || ''}>`;
+  const accSel = `<div class="field"><label for="x-acc">投資帳戶</label><select id="x-acc" data-s="acc" style="color:var(--accent);font-weight:500">${S.accounts.map(x => `<option value="${x.id}" ${x.id === a.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>`;
+  const stockPicker = `<div class="pick-wrap"><div class="grid2">${field('x-code', '股票代號', `<input id="x-code" class="num" value="${esc(sh.code)}" data-s="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="輸入代號或名稱" style="text-transform:uppercase" role="combobox" aria-autocomplete="list" aria-controls="x-sugg">`)}
+    ${field('x-name', '名稱', inp('x-name', 'name', f.name ?? stockName(sh.code), 'placeholder="例：元大高股息"'))}</div><div id="x-sugg" class="sugg" role="listbox" hidden></div></div>`;
+  const dateF = (lab) => field('x-date', lab || '日期', `<input id="x-date" type="date" value="${sh.date}" data-s="date">`);
+  const memoF = ph => field('x-memo', '備註', inp('x-memo', 'memo', f.memo, `placeholder="${ph || ''}"`));
+  let body = '';
+  if (t === 'buy' || t === 'sell') {
+    const qty = num(f.qty), price = f.price != null && f.price !== '' ? num(f.price) : (S.stocks[sh.code] && S.stocks[sh.code].price) || 0;
+    const shares = sh.unit === 'lot' ? qty * 1000 : qty, amt = shares * price;
+    const rate = sh.rate != null ? sh.rate : +(0.1425 * a.disc).toFixed(4);
+    const fee = sh.feeTouched ? num(f.fee) : (amt > 0 ? Math.max(a.min, Math.floor(amt * rate / 100)) : 0);
+    const tax = t === 'sell' ? (sh.taxTouched ? num(f.tax) : Math.floor(amt * taxRate(sh.code, sh.date))) : 0;
+    const held = (m.holds.find(h => h.code === sh.code) || {}).shares || 0;
+    const net = t === 'buy' ? -(amt + fee) : amt - fee - tax;
+    body = stockPicker + `
+      <div class="grid2">
+        ${dateF('成交日期')}
+        <div class="field focus"><span class="k" style="display:flex;justify-content:space-between">成交數量<span><button class="btn small ghost" style="height:22px;padding:0 6px;${sh.unit === 'lot' ? 'color:var(--accent);font-weight:700' : ''}" data-a="unit" data-v="lot">張</button><button class="btn small ghost" style="height:22px;padding:0 6px;${sh.unit === 'sh' ? 'color:var(--accent);font-weight:700' : ''}" data-a="unit" data-v="sh">股</button></span></span><input class="bignum" type="text" inputmode="decimal" value="${esc(f.qty ?? '')}" data-s="qty" aria-label="成交數量" placeholder="0"></div>
+      </div>
+      ${t === 'sell' ? `<button class="btn small" data-a="allHeld" style="align-self:flex-start;color:var(--accent)" ${held ? '' : 'disabled'}>庫存選擇：${grp(held)} 股・全部帶入</button>` : ''}
+      <div class="grid2">
+        ${field('x-price', '成交價格', inp('x-price', 'price', f.price ?? (S.stocks[sh.code] && S.stocks[sh.code].price), 'class="bignum" type="text" step="0.01" inputmode="decimal"'))}
+        <div class="field"><label for="x-fee">手續費（可自行修改）</label><div style="display:flex;gap:6px;align-items:center"><input id="x-fee" class="num" type="text" value="${fee}" data-s="fee" style="flex:1"><span style="display:flex;align-items:center;gap:2px;border-left:1px solid var(--line);padding-left:6px"><input id="x-rate" class="num" type="text" inputmode="decimal" value="${rate}" data-s="rate" aria-label="手續費率" style="width:62px;text-align:right"><span class="unit">%</span></span></div></div>
+        ${t === 'sell' ? field('x-tax', `證交稅（${grp(taxRate(sh.code, sh.date) * 100, 1)}%）`, inp('x-tax', 'tax', tax, 'class="num" type="text"')) : ''}
+        <div class="field" data-live="net" style="background:var(--sunk);border-color:var(--sunk)"><span class="k">淨收付</span><b class="num ${net < 0 ? '' : 'up'}" style="font-size:22px">${net < 0 ? '−' : '+'}$${grp(Math.abs(net))}</b></div>
+      </div>
+      ${memoF()}
+      <p class="small" data-live="hint" style="margin:0">${grp(shares)} 股・手續費率預設 0.1425% × ${a.disc} 折${t === 'sell' ? '・目前持有 ' + grp(held) + ' 股' : ''}</p>`;
+  } else if (t === 'div') {
+    if (sh.code && sh.filledFor !== sh.code && f.per == null && f.perStock == null) divPrefill(a, sh);
+    const d = divForm(a, sh);
+    const evNote = sh.ev && sh.filledFor === sh.code ? `已依 ${roc(sh.ev.ex)} 除權息公告帶入每股股利${sh.ev.pay ? '（' + roc(sh.ev.pay) + ' 發放）' : ''}` : '';
+    const autoTag = (on, k) => `<span data-live="tag-${k}" style="color:var(--accent);font-size:11px">${on ? '' : '　自動計算'}</span>`;
+    body = stockPicker + `
+      ${dateF('除權息日期')}
+      <div class="grid2">
+        ${field('x-held', `除權息前庫存（股）<span data-live="tag-held" style="color:var(--accent);font-size:11px">${f.held != null && f.held !== '' ? '' : '　自動帶入'}</span>`, inp('x-held', 'held', f.held ?? d.curHeld, 'class="num" type="text" inputmode="numeric"'))}
+        ${field('x-per', '每股現金股利（元）', inp('x-per', 'per', f.per, 'class="num" type="text" step="0.0001" inputmode="decimal" placeholder="0"'))}
+        ${field('x-pst', '每股股票股利（元）', inp('x-pst', 'perStock', f.perStock, 'class="num" type="text" step="0.0001" inputmode="decimal" placeholder="0"'))}
+        ${field('x-int', '利息（手動填入）', inp('x-int', 'interest', f.interest, 'class="num" type="text" inputmode="numeric" placeholder="0"'))}
+        ${field('x-cash', '配發現金' + autoTag(sh.cashTouched, 'cash'), inp('x-cash', 'cash', d.cash || '', 'class="bignum" type="text" inputmode="numeric" placeholder="0"'), 'focus')}
+        ${field('x-ssh', '配發股數' + autoTag(sh.sshTouched, 'ssh'), inp('x-ssh', 'stockSh', d.stockSh || '', 'class="bignum" type="text" inputmode="numeric" placeholder="0"'))}
+        ${field('x-other', '其他費用（匯費、補充保費）' + autoTag(sh.otherTouched, 'other'), inp('x-other', 'other', d.other || '', 'class="num" type="text" inputmode="numeric" placeholder="0"'))}
+      </div>
+      <p class="small" style="margin:0">庫存依除權息日前一天的持股自動帶入。配發現金 = 庫存 × 每股現金股利；配發股數 = 庫存 × 每股股票股利 ÷ 10。標「自動計算」的欄位也可以直接改成實際金額。</p>
+      <div class="card" data-live="sum" style="background:var(--gold-soft);padding:12px 14px;display:flex;flex-direction:column;gap:6px">
+        <div class="lr"><span>原始股利金額</span><b class="num">${money(d.orig, { show: true })}</b></div>
+        <div class="lr"><span>匯費等其他費用</span><b class="num">${money(-d.other, { show: true })}</b></div>
+        <div class="lr"><span>利息</span><b class="num">${money(-d.interest, { show: true })}</b></div>
+        <div class="lr" style="border-top:1px solid var(--line);padding-top:6px"><span style="color:var(--ink);font-weight:700">最後股利金額</span><b class="num gold" style="font-size:22px;font-weight:700">${money(d.fin, { show: true })}</b></div>
+        ${d.stockSh ? `<div class="lr"><span>配發股數</span><b class="num">+${grp(d.stockSh)} 股</b></div>` : ''}
+        <span class="small">原始股利金額 = 配發現金（未扣匯費）；最後股利金額 = 原始股利 − 其他費用 − 利息</span>
+      </div>
+      ${memoF('例：115 年 11 月配息')}
+      <button class="btn ghost" data-a="divQuery" style="color:var(--ex);font-size:17px">查詢／試算股利</button>
+      ${evNote ? `<p class="small" style="margin:0">${evNote}</p>` : ''}`;
+  } else {
+    const est = 0;
+    body = `<div class="grid2">${field('x-amt', ({ in: '存入金額', out: '出金金額', loan: '利息' })[t], inp('x-amt', 'amount', f.amount ?? (t === 'loan' && est ? est : ''), 'class="bignum" type="text" inputmode="numeric" placeholder="0"'), 'focus')}${dateF(t === 'loan' ? '扣款日期' : '日期')}</div>
+      ${memoF(t === 'in' ? '例：115 年 1–12 月定存金' : t === 'loan' ? '例：115 年 11 月利息' : '')}
+      ${t === 'loan' ? `<p class="small" style="margin:0">這個月沒有股利、但有利息時用這裡記，從累計股息扣除。</p>` : ''}`;
+  }
+  const html = `<div class="sheet-bg" data-a="closeSheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="${sh.editId ? '修改' : '新增'}" data-stop="1">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:-4px -6px 0"><button class="btn ghost" data-a="closeSheet">取消</button><h2 style="margin:0;font-size:18px">${sh.editId ? '修改這筆' : '新增'}</h2><button class="btn ghost" data-a="save" style="color:var(--accent);font-weight:700">完成</button></div>
+    ${segBar(Object.entries(GROUPS).map(([g, [l]]) => [g, l]), groupOf(t), 'sgroup')}
+    ${GROUPS[groupOf(t)][1].length > 1 ? segBar(GROUPS[groupOf(t)][1].map(k => TYPES.find(x => x[0] === k)), t, 'stype') : ''}
+    ${body}
+    <button class="btn primary" data-a="save">完成</button>
+  </div></div>`;
+  if (only) return html;
+  painting = true; try { $('#sheetRoot').innerHTML = html; } finally { painting = false; }
+}
+function findEvent(code, a) {
+  const st = S.stocks[code]; if (!st) return null;
+  const today = todayISO(); a = a || acc();
+  const evs = st.events.filter(e => (e.cash || e.stock) && e.ex <= today).sort((x, y) => x.ex < y.ex ? 1 : -1);
+  for (const e of evs) {
+    const needCash = e.cash && !a.txns.some(t => t.ev === e.id && t.type === 'cash');
+    const needStock = e.stock && !a.txns.some(t => t.ev === e.id && t.type === 'stock');
+    if (needCash || needStock) return e;
+  }
+  return null;
+}
+function saveSheet() {
+  const sh = V.sheet, t = sh.type, f = sh.f;
+  const code = (sh.code || '').trim().toUpperCase();
+  const need = ['buy', 'sell', 'div'].includes(t);
+  if (need && !code) return toast('請填股票代號');
+  let a0 = sheetAcc(); const m = compute(a0);
+  let txs = [];
+  const base = { date: sh.date || todayISO(), memo: (f.memo || '').trim() || undefined };
+  if (t === 'buy' || t === 'sell') {
+    const qty = num(f.qty), shares = Math.round(sh.unit === 'lot' ? qty * 1000 : qty);
+    const price = f.price != null && f.price !== '' ? num(f.price) : (S.stocks[code] && S.stocks[code].price) || 0;
+    if (!(shares > 0)) return toast('請填成交數量');
+    if (!(price > 0)) return toast('請填成交價格');
+    const amt = shares * price, rate = sh.rate != null ? sh.rate : 0.1425 * a0.disc;
+    const tx = Object.assign({ id: uid(), type: t, code, shares, price, fee: sh.feeTouched ? num(f.fee) : Math.max(a0.min, Math.floor(amt * rate / 100)) }, base);
+    if (t === 'sell') {
+      let held = (m.holds.find(h => h.code === code) || {}).shares || 0;
+      if (sh.editId) { const o = (S.accounts.find(x => x.id === sh.editAcc) || a0).txns.find(x => x.id === sh.editId); if (o && o.type === 'sell' && o.code === code && sh.editAcc === a0.id) held += o.shares; }
+      if (mode !== 'demo' && shares > held) return toast(`只持有 ${grp(held)} 股，不能賣 ${grp(shares)} 股`);
+      tx.tax = sh.taxTouched ? num(f.tax) : Math.floor(amt * taxRate(code, tx.date));
+    }
+    txs.push(tx);
+  } else if (t === 'div') {
+    const d = divForm(a0, sh);
+    if (!(d.cash > 0) && !(d.stockSh > 0)) return toast('請填每股股利，或直接填配發現金／配發股數');
+    const ev = sh.ev && sh.filledFor === code ? sh.ev : null;
+    if (d.cash > 0) txs.push(Object.assign({ id: uid(), type: 'cash', code, shares: d.held, perShare: d.per || undefined, gross: d.cash, other: d.other, amount: d.cash - d.other, interest: d.interest, ev: ev ? ev.id : undefined }, base));
+    if (d.stockSh > 0) txs.push(Object.assign({ id: uid(), type: 'stock', code, shares: d.stockSh, perShare: d.perStock || undefined, ev: ev ? ev.id : undefined }, base));
+  } else {
+    const amount = num(f.amount); if (!(amount > 0)) return toast('請填金額');
+    txs.push(Object.assign({ id: uid(), type: t, amount }, base));
+  }
+  const accName0 = a0.name, accId0 = a0.id;
+  const fresh = false;
+  const a = fresh ? acc() : (S.accounts.find(x => x.id === accId0) || acc());
+  if (fresh && !/範例/.test(accName0)) a.name = accName0;
+  if (need) {
+    const nm = (f.name ?? '').trim() || stockName(code), px = txs[0].price;
+    if (!S.stocks[code]) S.stocks[code] = { name: nm || code, freq: '', price: px ?? null, chg: 0, pdate: px ? txs[0].date : null, events: [] };
+    else if (nm) S.stocks[code].name = nm;
+    if (px && S.stocks[code].price == null) { S.stocks[code].price = px; S.stocks[code].pdate = txs[0].date; }
+  }
+  txs.forEach(x => { for (const k in x) if (x[k] === undefined) delete x[k]; });
+  if (sh.editId) {
+    const src = S.accounts.find(x => x.id === sh.editAcc);
+    if (src) src.txns = src.txns.filter(x => x.id !== sh.editId);
+    txs[0].id = sh.editId;
+    if (sh.keepEv && t === 'div') txs.forEach(x => { if (!x.ev) x.ev = sh.keepEv; });
+    a.txns.push(...txs);
+    V.sheet = null; persist(); render(); toast('已修改這筆紀錄'); return;
+  }
+  a.txns.push(...txs);
+  V.sheet = null; persist(); render();
+  toast(mode === 'demo' ? '已記入範例帳戶（範例模式不會儲存）' : '已記入「' + a.name + '」');
+}
+
+/* ================= events ================= */
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]');
+  if (V.accMenu && (!el || !['accMenu', 'pickAcc'].includes(el.dataset.a))) { V.accMenu = false; render(); if (!el) return; }
+  if (!el) return;
+  if (el.dataset.a === 'closeSheet' && e.target.closest('[data-stop]') && el.classList.contains('sheet-bg')) return;
+  const a = el.dataset.a, v = el.dataset.v;
+  if (a !== 'del' && a !== 'logout') V.armed = null;
+  switch (a) {
+    case 'tab': V.tab = v; V.page = null; try { localStorage.setItem('wwc-tab', v); } catch (x) {} scrollTo(0, 0); break;
+    case 'go': V.prev = { tab: V.tab, page: V.page, code: V.code }; V.page = v; if (v === 'accounts') V.openAcc = V.openAcc || S.cur; scrollTo(0, 0); break;
+    case 'back': if (V.prev && V.prev.page && V.prev.page !== V.page) { V.page = V.prev.page; V.code = V.prev.code; V.prev = null; } else V.page = null; scrollTo(0, 0); break;
+    case 'stock': V.prev = { tab: V.tab, page: V.page, code: V.code }; V.page = 'stock'; V.code = v; scrollTo(0, 0); break;
+    case 'hide': S.settings.hide = !S.settings.hide; persist(); break;
+    case 'metric': V.metric = v; break;
+    case 'ledger': V.ledger = v; break;
+    case 'hist': V.hist = v; break;
+    case 'calView': V.calView = v; break;
+    case 'calOn': V.calOn[v] = !V.calOn[v]; break;
+    case 'calSel': V.calSel = V.calSel === v ? null : v; break;
+    case 'calMove': { const [y, m] = V.calMonth.split('-').map(Number); const d = new Date(y, m - 1 + (+v), 1); V.calMonth = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); V.calSel = null; break; }
+    case 'openAcc': V.openAcc = V.openAcc === v ? null : v; break;
+    case 'accMenu': V.accMenu = !V.accMenu; break;
+    case 'pickAcc': V.accMenu = false; if (S.cur !== v) { S.cur = v; persist(); } break;
+    case 'setCur': S.cur = v; persist(); toast('已切換到「' + acc().name + '」'); break;
+    case 'tabAcc': S.cur = v; V.page = null; V.tab = 'ledger'; persist(); break;
+    case 'addAcc': {
+      const inp = $('#newAcc'), name = (inp.value || '').trim();
+      if (!name) { toast('請輸入帳戶名稱'); inp.focus(); return; }
+      if (S.accounts.some(x => x.name === name)) return toast('已經有同名帳戶');
+      const fresh = startOwn(false);
+      if (fresh) { S.accounts[0].name = name; } else { const n = newAccount(name); S.accounts.push(n); S.cur = n.id; }
+      V.openAcc = S.cur; persist(); toast(fresh ? '已清除範例，建立帳戶「' + name + '」' : '已新增帳戶「' + name + '」'); break;
+    }
+    case 'toggle': S.settings[v] = !S.settings[v]; persist(); break;
+    case 'divMode': S.settings.divMode = S.settings.divMode === 'auto' ? 'confirm' : 'auto'; autoPost(); persist(); toast(S.settings.divMode === 'auto' ? '已改成發放日自動入帳' : '已改成待確認後入帳'); break;
+    case 'startFresh': startOwn(false); V.page = null; V.tab = 'home'; toast('已清除範例，可以開始記帳'); break;
+    case 'del': {
+      if (V.armed !== v) { V.armed = v; render(); setTimeout(() => { if (V.armed === v) { V.armed = null; render(); } }, 3500); return; }
+      V.armed = null;
+      if (mode === 'demo') { toast('範例資料不能刪除，開始記帳後才能編輯'); break; }
+      if (v.startsWith('acc:')) { const id = v.slice(4); const nm = (S.accounts.find(x => x.id === id) || {}).name; S.accounts = S.accounts.filter(x => x.id !== id); if (S.cur === id) S.cur = S.accounts[0].id; V.openAcc = null; toast('已刪除帳戶「' + nm + '」'); }
+      else if (v.startsWith('ev:')) { const id = v.slice(3); const st = S.stocks[V.code]; if (st) st.events = st.events.filter(x => x.id !== id); toast('已刪除公告'); }
+      else { const a0 = acc(); a0.txns = a0.txns.filter(t => t.id !== v); toast('已刪除'); }
+      persist(); break;
+    }
+    case 'addEvent': {
+      const ex = $('#ev-ex').value, pay = $('#ev-pay').value, cash = num($('#ev-cash').value), stock = num($('#ev-stock').value);
+      if (!ex) return toast('請填除息（權）日');
+      if (!cash && !stock) return toast('請填每股現金或股票股利');
+      if (mode === 'demo') return toast('範例資料不能新增，開始記帳後才能編輯');
+      const st = S.stocks[V.code]; st.events.push({ id: uid(), ex, pay: pay || null, cash, stock });
+      autoPost(); persist(); toast('已新增公告，發放日會自動入帳'); break;
+    }
+    case 'add': V.armed = null; openSheet(v, el.dataset.code); return;
+    case 'closeSheet': V.sheet = null; break;
+    case 'syncNow': syncNow(); return;
+    case 'editTx': openEdit(v); return;
+    case 'allHeld': { const h = compute(sheetAcc()).holds.find(x => x.code === V.sheet.code); if (h) { V.sheet.unit = 'sh'; V.sheet.f.qty = String(h.shares); } break; }
+    case 'browseDemo': V.needLogin = false; V.browseDemo = true; break;
+    case 'showLogin': V.needLogin = true; V.browseDemo = false; FB.err = ''; break;
+    case 'googleLogin': {
+      const pv = new firebase.auth.GoogleAuthProvider();
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+      (standalone ? FB.auth.signInWithRedirect(pv) : FB.auth.signInWithPopup(pv)).catch(e => { if (e.code === 'auth/popup-blocked') return FB.auth.signInWithRedirect(pv); FB.err = loginError(e); render(); });
+      return;
+    }
+    case 'emailLogin': case 'emailSignup': {
+      const em = ($('#lg-email').value || '').trim(), pw = $('#lg-pw').value || '';
+      if (!em || !pw) { FB.err = '請輸入 Email 和密碼'; break; }
+      (a === 'emailLogin' ? FB.auth.signInWithEmailAndPassword(em, pw) : FB.auth.createUserWithEmailAndPassword(em, pw)).catch(e => { FB.err = loginError(e); render(); });
+      return;
+    }
+    case 'resetPw': {
+      const em = ($('#lg-email').value || '').trim();
+      if (!em) { FB.err = '請先在上面輸入 Email'; break; }
+      FB.auth.sendPasswordResetEmail(em).then(() => { FB.err = '已寄出重設密碼的信到 ' + em; render(); }).catch(e => { FB.err = loginError(e); render(); });
+      return;
+    }
+    case 'logout':
+      if (V.armed !== 'logout') { V.armed = 'logout'; render(); setTimeout(() => { if (V.armed === 'logout') { V.armed = null; render(); } }, 3500); return; }
+      V.armed = null; V.page = null; FB.auth.signOut(); return;
+    case 'reqOpen': V.reqOpened = true; break;
+    case 'reqClose': V.reqOpened = false; break;
+    case 'copyField': { const f = $('#rq-' + v); if (!f) return; f.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (x) {} (navigator.clipboard && !ok ? navigator.clipboard.writeText(f.value) : (ok ? Promise.resolve() : Promise.reject())).then(() => toast('已複製')).catch(() => toast('請長按欄位文字手動複製')); return; }
+    case 'reqSent': { S.requested = S.requested || {}; for (const c of v.split(',')) S.requested[c] = todayISO(); V.reqOpened = false; persist(); render(); toast('謝謝！擁有者同意後就會開始每日更新'); return; }
+    case 'cancelSent': { S.requested = S.requested || {}; for (const c of v.split(',')) delete S.requested[c]; persist(); setTimeout(render, 300); return; }
+    case 'reqCopy': { const [k, cs] = v.split(':'); const m = reqMail(k, cs.split(',')); const txt = `收件人：${OWNER_MAIL}\n主旨：${m.subj}\n\n${m.body}`; (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('已複製，貼到郵件寄給 ' + OWNER_MAIL)).catch(() => toast('無法複製，請手動寄信到 ' + OWNER_MAIL)); if (k === 'add') { V.reqOpened = true; setTimeout(render, 300); } return; }
+    case 'shApprove': { const p = ((SHARED.requests && SHARED.requests.pending) || []).find(x => x.code === v); saveApproved(c => { c.codes[v] = { name: stockName(v), requesters: (p && p.from) || [], approvedAt: todayISO() }; delete c.dismissed[v]; }); toast(v + ' 已加入，隔天 15:00 起每日更新'); return; }
+    case 'shDismiss': saveApproved(c => { c.dismissed[v] = todayISO(); }); return;
+    case 'shRemove': saveApproved(c => { delete c.codes[v]; }); return;
+    case 'shAdd': { const el = $('#shAdd'), code = (el && el.value || '').trim().toUpperCase(); if (!/^[0-9A-Z]{4,6}$/.test(code)) { toast('請輸入正確的股票代號'); return; } if (!TW_NAMES[code]) { toast('找不到 ' + code + '，請確認代號'); return; } saveApproved(c => { c.codes[code] = Object.assign({ requesters: [] }, c.codes[code], { name: stockName(code), approvedAt: todayISO() }); delete c.dismissed[code]; }); toast(code + ' 已加入'); return; }
+    case 'plMode': S.settings.plMode = v; persist(); break;
+    case 'realMode': S.settings.realMode = v; persist(); break;
+    case 'goPending': V.page = null; V.tab = 'ledger'; V.ledger = 'div'; scrollTo(0, 0); break;
+    case 'confirmDiv': {
+      const ev = (S.stocks[v] && S.stocks[v].events.find(x => x.id === el.dataset.ev)); if (!ev) return;
+      openSheet('div', v);
+      const sh = V.sheet; sh.f.per = String(ev.cash || ''); sh.f.perStock = String(ev.stock || ''); sh.date = ev.ex; sh.ev = ev; sh.filledFor = v;
+      render(); setTimeout(() => { const x = document.getElementById('x-int'); if (x) x.focus(); }, 60); return;
+    }
+    case 'divQuery': { const r = divPrefill(sheetAcc(), V.sheet); if (!r) toast(S.stocks[V.sheet.code] ? '這檔沒有尚未入帳的除權息公告，可到個股頁新增' : '請先輸入股票代號'); else toast('已依除息公告試算帶入'); break; }
+    case 'sgroup': V.sheet.cashTouched = V.sheet.sshTouched = V.sheet.otherTouched = false; V.sheet.ev = null; V.sheet.filledFor = null; V.sheet.type = GROUPS[v][1][0]; V.sheet.f = {}; V.sheet.feeTouched = V.sheet.taxTouched = false; break;
+    case 'stype': V.sheet.ev = null; V.sheet.filledFor = null; V.sheet.type = v; V.sheet.f = {}; V.sheet.feeTouched = V.sheet.taxTouched = false; break;
+    case 'unit': V.sheet.unit = v; break;
+    case 'save': saveSheet(); return;
+    case 'planM': V.plan.m = +v; break;
+    case 'planRe': V.plan.re = !V.plan.re; break;
+    case 'export': doExport(); return;
+    case 'import': $('#importFile').click(); return;
+    default: return;
+  }
+  render();
+});
+// sheet inputs update draft state without re-render (except where totals depend on them)
+document.addEventListener('input', e => {
+  if (painting) return;
+  const el = e.target;
+  if (el.dataset.s && V.sheet) {
+    const k = el.dataset.s, sh = V.sheet;
+    if (k === 'code') { sh.code = el.value.trim().toUpperCase(); if (!sh.nameTouched) { delete sh.f.name; const n = $('#x-name'); if (n) n.value = stockName(sh.code); } showSugg(el.value); }
+    else if (k === 'name') { sh.f.name = el.value; sh.nameTouched = el.value.trim() !== ''; }
+    else if (k === 'acc') { sh.accId = el.value; renderSheet(); return; }
+    else if (k === 'rate') { sh.rate = num(el.value); sh.feeTouched = false; refreshSheetTotals(); return; }
+    else if (k === 'date') { sh.date = el.value; if (sh.type === 'div') refreshSheetTotals(); }
+    else { sh.f[k] = el.value; if (k === 'fee') sh.feeTouched = true; if (k === 'tax') sh.taxTouched = true; if (k === 'cash') sh.cashTouched = el.value !== ''; if (k === 'stockSh') sh.sshTouched = el.value !== ''; if (k === 'other') sh.otherTouched = el.value !== ''; }
+    if (['qty', 'price', 'fee', 'tax', 'per', 'perStock', 'held', 'shares', 'cash', 'stockSh', 'other', 'interest'].includes(k)) { refreshSheetTotals(el); }
+  }
+});
+document.addEventListener('change', e => {
+  if (painting) return;
+  const el = e.target;
+  if (el.dataset.s === 'code' && V.sheet) { const sh = V.sheet; for (const k of ['cash', 'other', 'stockSh', 'held', 'per', 'perStock']) delete sh.f[k]; sh.cashTouched = sh.sshTouched = sh.otherTouched = false; sh.ev = null; sh.filledFor = null; refreshSheetTotals(); return; }
+  if (el.dataset.s) return;
+  if (el.id === 'importFile') return;
+  const f = el.dataset.f; if (!f) return;
+  const v = el.value;
+  if (f === 'budget') { V.budget = Math.max(0, num(v)); render(); return; }
+  if (f === 'planM') { V.plan.m = Math.max(0, num(v)); render(); return; }
+  if (f === 'planY') { V.plan.y = num(v); render(); return; }
+  if (f === 'planG') { V.plan.g = num(v); render(); return; }
+  if (mode === 'demo' && ['price', 'freq'].includes(f)) { const st = S.stocks[V.code]; if (f === 'price') { st.price = num(v); st.chg = 0; } else st.freq = v; render(); toast('範例資料的變更不會儲存'); return; }
+  if (f === 'price') { const st = S.stocks[V.code]; st.price = num(v); st.chg = 0; st.pdate = todayISO(); toast('已更新現價'); }
+  else if (f === 'freq') S.stocks[V.code].freq = v;
+  else if (f === 'goal') S.settings.goal = Math.max(0, num(v));
+  else if (f === 'remit') S.settings.remit = Math.max(0, num(v));
+  else if (f.startsWith('acc')) {
+    const a = S.accounts.find(x => x.id === el.dataset.id); if (!a) return;
+    if (f === 'accName' && v.trim()) a.name = v.trim();
+    if (f === 'accDisc' && num(v) > 0 && num(v) <= 1) a.disc = num(v);
+    if (f === 'accMin' && num(v) >= 0) a.min = num(v);
+    if (f === 'accRate' && num(v) >= 0) a.loanRate = num(v) / 100;
+    toast('已更新');
+  }
+  persist(); render();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('tap') && !V.sheet) { openEdit(e.target.dataset.v); } });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && V.sheet) { V.sheet = null; render(); }
+  if (e.key === 'Enter' && e.target.id === 'newAcc') { e.preventDefault(); document.querySelector('[data-a="addAcc"]').click(); }
+});
+/* ---- 代號輸入提示：輸入代號或名稱的一部分，列出最相關的前 5 檔 ---- */
+const POPULAR = ['0050', '0056', '00878', '00919', '00929', '00940', '00713', '006208', '00692', '2330', '2412', '2886', '2891', '2884', '5880', '00400A', '00403A'];
+function suggestCodes(q) {
+  q = String(q || '').trim(); if (!q) return [];
+  const Q = q.toUpperCase(), a = sheetAcc(), held = new Set(compute(a).holds.map(h => h.code)), mine = new Set(Object.keys(S.stocks));
+  const out = [];
+  for (const [c, n] of Object.entries(TW_NAMES)) {
+    let r;
+    if (c === Q) r = 0; else if (c.startsWith(Q)) r = 1; else if (n.toUpperCase().startsWith(Q)) r = 2; else if (n.toUpperCase().includes(Q)) r = 3; else if (c.includes(Q)) r = 4; else continue;
+    const bonus = held.has(c) ? 0 : mine.has(c) ? 1 : POPULAR.includes(c) ? 2 : 3;
+    out.push([r, bonus, c.length, c, n]);
+  }
+  out.sort((x, y) => x[0] - y[0] || x[1] - y[1] || x[2] - y[2] || (x[3] < y[3] ? -1 : 1));
+  return out.slice(0, 5).map(x => ({ code: x[3], name: x[4], held: held.has(x[3]) }));
+}
+function hl(text, q) { const i = text.toUpperCase().indexOf(q.toUpperCase()); return i < 0 ? esc(text) : esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length)); }
+let suggIdx = 0;
+function showSugg(q) {
+  const box = $('#x-sugg'); if (!box) return;
+  const list = suggestCodes(q);
+  if (!list.length || (list.length === 1 && list[0].code === String(q).trim().toUpperCase())) { box.hidden = true; box.innerHTML = ''; return; }
+  suggIdx = 0;
+  box.innerHTML = list.map((x, i) => `<button type="button" role="option" data-pick="${esc(x.code)}" class="${i === 0 ? 'on' : ''}"><b>${hl(x.code, q.trim())}</b><span>${hl(x.name, q.trim())}</span>${x.held ? '<span class="tag">持有中</span>' : ''}</button>`).join('');
+  box.hidden = false;
+}
+function hideSugg() { const box = $('#x-sugg'); if (box) { box.hidden = true; box.innerHTML = ''; } }
+function pickCode(code) {
+  const sh = V.sheet, el = $('#x-code'); if (!sh || !el) return;
+  el.value = code; sh.code = code;
+  if (!sh.nameTouched) { delete sh.f.name; const n = $('#x-name'); if (n) n.value = stockName(code); }
+  for (const k of ['cash', 'other', 'stockSh', 'held', 'per', 'perStock']) delete sh.f[k];
+  sh.cashTouched = sh.sshTouched = sh.otherTouched = false; sh.ev = null; sh.filledFor = null;
+  hideSugg(); refreshSheetTotals();
+}
+document.addEventListener('pointerdown', e => { const b = e.target.closest('[data-pick]'); if (b) { e.preventDefault(); pickCode(b.dataset.pick); } else if (!e.target.closest('#x-code')) hideSugg(); });
+document.addEventListener('keydown', e => {
+  if (e.target.id !== 'x-code') return;
+  const box = $('#x-sugg'); if (!box || box.hidden) return;
+  const btns = [...box.querySelectorAll('[data-pick]')]; if (!btns.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); suggIdx = (suggIdx + (e.key === 'ArrowDown' ? 1 : btns.length - 1)) % btns.length; btns.forEach((b, i) => b.classList.toggle('on', i === suggIdx)); }
+  else if (e.key === 'Enter') { e.preventDefault(); pickCode(btns[suggIdx].dataset.pick); }
+  else if (e.key === 'Escape') hideSugg();
+});
+function refreshSheetTotals() { // update computed parts only; never touch the field being typed in
+  const root = $('#sheetRoot'), tmp = document.createElement('div');
+  tmp.innerHTML = renderSheet(true);
+  tmp.querySelectorAll('[data-live]').forEach(n => { const o = root.querySelector(`[data-live="${n.dataset.live}"]`); if (o && o.innerHTML !== n.innerHTML) o.innerHTML = n.innerHTML; });
+  tmp.querySelectorAll('input[id]').forEach(n => { const o = document.getElementById(n.id); if (o && o !== document.activeElement && o.value !== n.value) o.value = n.value; });
+}
+$('#importFile').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const d = JSON.parse(rd.result);
+      if (!Array.isArray(d.accounts) || !d.stocks) throw 0;
+      if (d.merge === 'append') { // 追加匯入：只把檔案內的帳戶交易加進同名帳戶，其他資料不動
+        const m = JSON.parse(JSON.stringify(S)); let added = 0, updated = 0;
+        d.accounts.forEach(fa => {
+          let ta = m.accounts.find(x => x.name === fa.name);
+          if (!ta) { ta = Object.assign({}, fa, { txns: [] }); m.accounts.push(ta); }
+          else if (fa.applySettings) ['disc', 'min'].forEach(k => { if (fa[k] != null) ta[k] = fa[k]; });
+          const ids = new Set((ta.txns || []).map(t => t.id)); ta.txns = ta.txns || [];
+          (fa.txns || []).forEach(t => { if (!ids.has(t.id)) { ta.txns.push(t); added++; } else { const i = ta.txns.findIndex(x => x.id === t.id); if (JSON.stringify(ta.txns[i]) !== JSON.stringify(t)) { ta.txns[i] = t; updated++; } } });
+        });
+        Object.keys(d.stocks).forEach(c => { if (!m.stocks[c]) m.stocks[c] = d.stocks[c]; });
+        S = normalize(m); mode = store && store.kind === 'db' ? 'saved' : 'local'; persist(); render();
+        toast(`${d.accounts.map(a => a.name).join('、')}：新增 ${added} 筆${updated ? `、更新 ${updated} 筆` : ''}`);
+        e.target.value = ''; return;
+      }
+      S = normalize(d); mode = store && store.kind === 'db' ? 'saved' : 'local'; persist(); render();
+      toast(`已匯入 ${S.accounts.length} 個帳戶`);
+    } catch (x) { toast('檔案格式不對，請選本 App 匯出的備份檔'); }
+    e.target.value = '';
+  };
+  rd.readAsText(file);
+});
+async function doExport() {
+  const data = JSON.stringify(S, null, 2);
+  try {
+    const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+    if (dl) { await dl.save({ filename: '穩穩存備份_' + todayISO() + '.json', data }); toast('已匯出備份'); return; }
+  } catch (x) { if (x && x.code === 'declined') return; }
+  try { await navigator.clipboard.writeText(data); toast('已複製備份內容，可貼到記事本保存'); } catch (x) { toast('這個畫面無法下載，請在 claude.ai 打開 App 再匯出'); }
+}
+
+let tt; function toast(msg) { const el = $('#toast'); el.textContent = msg; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => el.hidden = true, 2600); }
+
+render();
+initStore();
+loadFeed();
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !(window.claude && window.claude.use)) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>

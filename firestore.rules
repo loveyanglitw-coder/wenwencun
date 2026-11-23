@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 公開版：每個人只能讀寫自己的帳本
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    // 個人版：只限擁有者（和 editions/personal.js 的 Email 一致）
+    match /personal/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid
+        && request.auth.token.email in ['loveyanglitw@gmail.com'];
+    }
+  }
+}
