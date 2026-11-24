@@ -74,8 +74,8 @@ jobs:
       - name: 組出公開版（/）與個人版（/me/）
         run: bash scripts/build_site.sh
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: _site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
