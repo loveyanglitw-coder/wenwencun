@@ -127,6 +127,7 @@ a{color:var(--accent)}
 .sugg button{display:flex;align-items:baseline;gap:10px;width:100%;padding:11px 14px;border:0;border-top:1px solid var(--line2);background:none;color:var(--ink);font:inherit;font-size:15px;text-align:left;cursor:pointer}
 .sugg button:first-child{border-top:0}
 .sugg button:hover,.sugg button.on{background:var(--accent-soft)}
+.sugg{max-height:min(320px,50vh);overflow-y:auto}.sugg-h{padding:8px 14px;font-size:12px;color:var(--muted);background:var(--bg)}.sugg-n{margin-left:auto;color:var(--muted);font-size:13px;white-space:nowrap}
 .sugg b{font-family:var(--f-num);min-width:64px}
 .sugg mark{background:none;color:var(--accent);font-weight:700}
 .sugg .tag{margin-left:auto;font-size:11px;color:var(--muted)}
@@ -1654,8 +1655,20 @@ function suggestCodes(q) {
 }
 function hl(text, q) { const i = text.toUpperCase().indexOf(q.toUpperCase()); return i < 0 ? esc(text) : esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length)); }
 let suggIdx = 0;
+// 賣出時：點代號欄就列出目前持股（不含外幣），輸入文字可篩選
+function heldSugg(q) {
+  const Q = String(q || '').trim().toUpperCase();
+  return compute(sheetAcc()).holds.filter(h => !isFX(h.code)).filter(h => !Q || h.code.includes(Q) || String(h.name).toUpperCase().includes(Q))
+    .map(h => ({ code: h.code, name: h.name, held: true, shares: h.shares }));
+}
 function showSugg(q) {
   const box = $('#x-sugg'); if (!box) return;
+  if (V.sheet && V.sheet.type === 'sell') {
+    const list = heldSugg(q); suggIdx = 0;
+    box.innerHTML = list.length ? `<div class="sugg-h">目前持股（點一下帶入）</div>` + list.map((x, i) => `<button type="button" role="option" data-pick="${esc(x.code)}" class="${i === 0 ? 'on' : ''}"><b>${esc(x.code)}</b><span>${esc(x.name)}</span>${isJP(x.code) ? '<span class="tag jp-tag">日股</span>' : ''}<span class="sugg-n num">${grp(x.shares)} 股</span></button>`).join('')
+      : `<div class="sugg-h">${String(q || '').trim() ? '目前持股沒有符合的代號' : '這個帳戶目前沒有持股'}</div>`;
+    box.hidden = false; return;
+  }
   const list = suggestCodes(q);
   if (!list.length || (list.length === 1 && list[0].code === String(q).trim().toUpperCase())) { box.hidden = true; box.innerHTML = ''; return; }
   suggIdx = 0;
@@ -1672,7 +1685,9 @@ function pickCode(code) {
   hideSugg(); if (sheetLayoutChanged()) renderSheet(); else refreshSheetTotals();
 }
 function sheetLayoutChanged() { const sh = V.sheet, j = isJP(sh.code); if (!!sh.wasJP === j) return false; sh.wasJP = j; return true; }
-document.addEventListener('pointerdown', e => { const b = e.target.closest('[data-pick]'); if (b) { e.preventDefault(); pickCode(b.dataset.pick); } else if (!e.target.closest('#x-code')) hideSugg(); });
+document.addEventListener('pointerdown', e => { const b = e.target.closest('[data-pick]'); if (b) { e.preventDefault(); pickCode(b.dataset.pick); } else if (!e.target.closest('#x-code') && !e.target.closest('#x-sugg')) hideSugg(); });
+document.addEventListener('focusin', e => { if (e.target.id === 'x-code' && V.sheet && V.sheet.type === 'sell') showSugg(e.target.value); });
+document.addEventListener('click', e => { if (e.target.id === 'x-code' && V.sheet && V.sheet.type === 'sell') showSugg(e.target.value); });
 document.addEventListener('keydown', e => {
   if (e.target.id !== 'x-code') return;
   const box = $('#x-sugg'); if (!box || box.hidden) return;
