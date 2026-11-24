@@ -580,9 +580,12 @@ def main():
     say(f'除權息合計 {sum(len(v) for v in events.values())} 筆（新增 {added}）')
 
     fx = old.get('fx')
+    fx_prev = old.get('fx_prev')
     try:
         new_fx = bot_fx()
         if not fx or {k: v for k, v in new_fx.items() if k != 'date'} != {k: v for k, v in fx.items() if k != 'date'}:
+            if fx and str(fx.get('date', ''))[:10] != str(new_fx.get('date', ''))[:10]:
+                fx_prev = {k: fx[k] for k in ('USD', 'JPY', 'date') if k in fx}  # 前一天的匯率，App 用來顯示漲跌
             fx = new_fx
         say(f"匯率：1 USD = {new_fx['USD']}、1 JPY = {new_fx['JPY']} 新台幣")
     except Exception as e:  # noqa: BLE001
@@ -598,6 +601,7 @@ def main():
         'prices': dict(sorted(prices.items())),
         'events': dict(sorted(events.items())),
         'fx': fx,
+        'fx_prev': fx_prev,
     }
     if not price_changed and data['events'] == (old.get('events') or {}) and fx == old.get('fx'):
         say(f'股價仍是 {old_date}，除權息也沒有變動，不更新')

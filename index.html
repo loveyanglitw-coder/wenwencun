@@ -174,6 +174,8 @@ nav.tabs .plus{justify-self:center;width:52px;height:52px;border-radius:18px;bac
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .jp-tag{display:inline-block;min-width:0;height:auto;line-height:1.5;font-weight:600;background:#fde8e8;color:#c0392b;margin-left:6px;font-size:11px;padding:1px 6px;border-radius:999px;vertical-align:middle;white-space:nowrap}
 .freq-tag{flex:none;font-size:12px;font-weight:500;color:var(--accent);background:var(--accent-soft);border:none;border-radius:999px;padding:1px 8px;white-space:nowrap}
+.fx-tag{display:inline-block;min-width:0;height:auto;line-height:1.5;font-weight:600;background:#E3EEFB;color:#185FA5;margin-left:6px;font-size:11px;padding:1px 6px;border-radius:999px;vertical-align:middle;white-space:nowrap}
+.hold-card.fx-card{border-left-color:#378ADD}
 </style>
 </head>
 <body>
@@ -301,7 +303,7 @@ const V = { tab: 'home', page: null, code: null, ledger: 'hold', hist: 'chart', 
 try { const t = localStorage.getItem('wwc-tab'); if (['home', 'ledger', 'hist', 'cal'].includes(t)) V.tab = t; } catch (e) {}
 
 const acc = () => S.accounts.find(a => a.id === S.cur) || S.accounts[0];
-const stockName = c => { const n = S.stocks[c] && S.stocks[c].name; return (n && n !== c ? n : TW_NAMES[c]) || n || ''; };
+const stockName = c => { if (FX_CURS[c]) return FX_CURS[c][0]; const n = S.stocks[c] && S.stocks[c].name; return (n && n !== c ? n : TW_NAMES[c]) || n || ''; };
 const sortTx = list => list.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
 
 // ---- 日股（個人版）：代號以 .T 結尾；交易、股利以日圓記錄，每筆帶入帳匯率 fx（1 日圓＝幾台幣），計算時換成台幣 ----
@@ -320,6 +322,19 @@ const yen = (n, plus) => { if (S.settings.hide) return '＊＊＊＊'; const v =
 const jpPx = n => '¥' + grp(n, n % 1 ? 1 : 0);
 const jpTag = c => isJP(c) ? '<span class="tag jp-tag">日股</span>' : '';
 function txAmt(t, n, opt) { return isJP(t.code) && t.type !== 'stock' ? `${yen(n, opt && opt.plus)}<span class="small" style="font-weight:400"> ≈${money(n * (t.fx || jpyRate()), opt)}</span>` : money(n, opt); }
+// ---- 外幣（當成一項投資）：買進 fxbuy／賣出 fxsell／利息 fxint，欄位 cur、qty（外幣金額）、rate（1 外幣＝幾台幣）、fee（台幣） ----
+const FX_CURS = { USD: ['美元', 'US$'], JPY: ['日圓', '¥'] };
+const isFX = c => !!FX_CURS[c];
+function fxRate(c) { return c === 'JPY' ? jpyRate() : (MARKET && MARKET.fx && MARKET.fx[c]) || 32; }
+function fxPrev(c) { const p = MARKET && MARKET.fx_prev; return p && p[c] ? p[c] : null; }
+const fxAmt = (c, n) => S.settings.hide ? '＊＊＊＊' : FX_CURS[c][1] + grp(n, Math.abs(n % 1) > 0.001 ? 2 : 0);
+const fxRateTxt = (c, r) => grp(r, c === 'JPY' ? 4 : 2);
+function fxTx(t) {
+  if (t.type === 'fxbuy') return Object.assign({}, t, { type: 'buy', code: t.cur, shares: t.qty, price: t.rate, fee: t.fee || 0 });
+  if (t.type === 'fxsell') return Object.assign({}, t, { type: 'sell', code: t.cur, shares: t.qty, price: t.rate, fee: t.fee || 0, tax: 0 });
+  if (t.type === 'fxint') return Object.assign({}, t, { code: t.cur, shares: t.qty });
+  return t;
+}
 function feeFor(a, amount) { return amount > 0 ? Math.max(a.min, Math.floor(amount * 0.001425 * a.disc)) : 0; }
 function taxRate(code, date) {
   code = (code || '').toUpperCase();
@@ -349,7 +364,7 @@ const origOf = t => t.gross != null ? t.gross : t.amount + (t.other || 0); // �
 const divPaid = t => t.type === 'cash' && t.amount > 0 && payDateOf(t) <= todayISO();
 /* ================= calculations ================= */
 function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯示日股的日圓數字）
-  const TX = raw ? a.txns : a.txns.map(twTx);
+  const TX = (raw ? a.txns : a.txns.map(twTx)).map(fxTx);
   const pos = {}, realized = {}, divs = {};
   let inSum = 0, outSum = 0, loanSum = 0, buySum = 0, sellNet = 0, cashSum = 0, origSum = 0, otherSum = 0, firstIn = null;
   const P = c => pos[c] || (pos[c] = { code: c, shares: 0, cost: 0, buyQty: 0, buyAmt: 0, divOnPos: 0, divRecv: 0, divPool: 0, first: null });
@@ -371,6 +386,9 @@ function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯�
       r.qty += sh; r.cost += avg * sh; r.proceeds += net; r.sellAmt += sh * t.price; r.fee += t.fee || 0; r.tax += t.tax || 0; r.pl += net - avg * sh; r.last = t.date;
       p.cost -= avg * sh; p.shares -= sh; sellNet += net;
       if (p.shares <= 0) { p.shares = 0; p.cost = 0; }
+    } else if (t.type === 'fxint') {
+      if (p.shares <= 0) { p.first = t.date; p.divOnPos = 0; p.divRecv = 0; p.divPool = 0; p.buyQty = 0; p.buyAmt = 0; }
+      p.shares += t.shares; p.fxInt = (p.fxInt || 0) + t.shares;
     } else if (t.type === 'stock') {
       p.shares += t.shares;
       const d = divs[t.code] || (divs[t.code] = { code: t.code, cash: 0, int: 0, sh: 0, n: 0 }); d.sh += t.shares;
@@ -380,8 +398,8 @@ function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯�
     }
   }
   const today = todayISO();
-  const holds = Object.values(pos).filter(p => p.shares > 0).map(p => {
-    const st = S.stocks[p.code] || {}, k = isJP(p.code) && !raw ? jpyRate() : 1;
+  const holds = Object.values(pos).filter(p => p.shares > 1e-6).map(p => {
+    const fx = isFX(p.code), st = fx ? { name: FX_CURS[p.code][0], price: fxRate(p.code), chg: fxPrev(p.code) ? fxRate(p.code) - fxPrev(p.code) : 0 } : S.stocks[p.code] || {}, k = isJP(p.code) && !raw ? jpyRate() : 1;
     const price = st.price != null ? st.price * k : (p.buyQty ? p.buyAmt / p.buyQty : 0);
     const mv = p.shares * price, pl = mv - p.cost, ret = p.cost ? pl / p.cost : 0;
     return Object.assign(p, { name: st.name || p.code, freq: st.freq || '', price, chg: (st.chg || 0) * k, mv, pl, ret,
@@ -398,7 +416,7 @@ function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯�
   const todayPL = holds.reduce((s, h) => s + h.today, 0);
   const invest = inSum - outSum;
   const balance = inSum - outSum - buySum + sellNet + cashSum - loanSum;
-  const sellCost = holds.reduce((s, h) => s + (isJP(h.code) ? 0 : feeFor(a, h.mv) + Math.floor(h.mv * taxRate(h.code))), 0);
+  const sellCost = holds.reduce((s, h) => s + (isJP(h.code) || isFX(h.code) ? 0 : feeFor(a, h.mv) + Math.floor(h.mv * taxRate(h.code))), 0);
   const stockPL = unreal + real, netDiv = cashSum - loanSum, total = stockPL + netDiv;
   const days = firstIn ? daysBetween(firstIn, today) : 0;
   // dividends expected this / next month from announced events
@@ -419,7 +437,7 @@ function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯�
   }
   const monthsElapsed = +today.slice(5, 7);
   return { holds, mv, cost, unreal, divHeld, unrealRet: cost ? unreal / cost : 0, real, realDiv, realCost, realRet: realCost ? real / realCost : 0, realList, divs: Object.values(divs),
-    cashSum, origSum, otherSum, wtaxSum: TX.reduce((s, t) => s + (t.type === 'cash' ? t.wtax || 0 : 0), 0), loanSum, netDiv, divCount: a.txns.filter(divPaid).length, inSum, outSum, invest, balance,
+    fxPL: holds.reduce((s, h) => s + (isFX(h.code) ? h.pl : 0), 0), cashSum, origSum, otherSum, wtaxSum: TX.reduce((s, t) => s + (t.type === 'cash' ? t.wtax || 0 : 0), 0), loanSum, netDiv, divCount: a.txns.filter(divPaid).length, inSum, outSum, invest, balance,
     value: balance + mv, netValue: balance + mv - sellCost, stockPL, total,
     stockRet: invest ? stockPL / invest : 0, totalRet: invest ? total / invest : 0, days,
     totalAnn: invest ? annualize(total / invest, days) : 0, stockAnn: invest ? annualize(stockPL / invest, days) : 0,
@@ -848,11 +866,24 @@ function donut(m) {
       <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><span class="small">${label}</span><span class="num" style="font-weight:600">${money(total)}</span></div></div>
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">${items.map(([c, v], i) => `<div style="display:flex;align-items:center;gap:8px;font-size:13px"><i style="width:10px;height:10px;border-radius:3px;background:var(${cols[i]});flex:none"></i><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b class="num" style="font-weight:600">${esc(c)}</b> ${esc(stockName(c))}</span><span class="num" style="font-weight:600">${grp(v / total * 100, 1)}%</span></div>`).join('')}</div></div>`;
 }
+function fxCard(h, m) {
+  const c = h.code, rate = h.price, avg = h.shares ? h.cost / h.shares : 0;
+  return `<div class="hold-card fx-card ${h.pl > 0 ? 'up' : h.pl < 0 ? 'down' : ''}">
+      <span class="hold-head">
+        <span class="hold-title"><span class="hold-code num">${c}</span><span class="hold-name" style="flex:0 1 auto">${esc(h.name)}</span><span class="tag fx-tag">外幣</span></span>
+        <span class="hold-price"><span class="s">匯率</span><b class="num ${cls(h.chg)}">${fxRateTxt(c, rate)}</b><span class="num ${cls(h.chg)}">${h.chg ? arrow(h.chg) + (h.chg > 0 ? '+' : '−') + fxRateTxt(c, Math.abs(h.chg)) : '—'}</span></span>
+      </span>
+      <span class="hold-body">
+        <span class="kv"><span class="k">持有（佔 ${grp(m.mv ? h.mv / m.mv * 100 : 0, 1)}%）</span><span class="num" style="font-weight:600">${fxAmt(c, h.shares)}</span><span class="s num">成本匯率 ${fxRateTxt(c, avg)}</span></span>
+        <span class="kv" style="align-items:center;text-align:center"><span class="k">台幣現值</span><span class="num" style="font-weight:600">${money(h.mv)}</span><span class="s num">成本 ${money(h.cost)}</span></span>
+        <span class="kv" style="align-items:flex-end;text-align:right"><span class="k">匯差損益</span><span class="num ${cls(h.pl)}" style="font-weight:700;font-size:16px">${money(h.pl, { plus: true })}</span><span class="s num">${pct(h.ret)}${h.fxInt ? '・含利息 ' + fxAmt(c, h.fxInt) : ''}</span></span>
+      </span></div>`;
+}
 function holdList(holds, m) {
   if (!holds.length) return `<div class="list"><div class="empty">還沒有持股。按下方「＋」記第一筆買進。</div></div>`;
   // 每檔持股一張獨立卡片：明顯的外框、左側損益色條、標題底色，卡片之間留較大間距
   const dm = S.settings.plMode === 'div';
-  return `<div class="hold-list">${holds.map(h => { const pl = dm ? h.plD : h.pl, ret = dm ? h.retD : h.ret, ann = dm ? h.annD : h.ann; return `
+  return `<div class="hold-list">${holds.map(h => { if (isFX(h.code)) return fxCard(h, m); const pl = dm ? h.plD : h.pl, ret = dm ? h.retD : h.ret, ann = dm ? h.annD : h.ann; return `
     <button class="hold-card rowbtn ${pl > 0 ? 'up' : pl < 0 ? 'down' : ''}" data-a="stock" data-v="${esc(h.code)}">
       <span class="hold-head">
         <span class="hold-title"><span class="hold-code num">${esc(h.code)}</span><span class="hold-name" style="flex:0 1 auto">${esc(h.name)}</span>${h.freq ? `<span class="freq-tag">${esc(h.freq)}</span>` : ''}${jpTag(h.code)}</span>
@@ -885,25 +916,28 @@ function pageLedger(a, m) {
   let sum = '', body = '';
   if (V.ledger === 'cash') {
     sum = L('累計存入', money(m.inSum)) + L('投資總額', money(m.invest), '', 'center') + L('出金', money(m.outSum), '', 'right');
-    const list = sortTx(a.txns.filter(t => ['in', 'out'].includes(t.type))).reverse();
-    const lab = { in: ['存入', 'var(--accent-soft)', 'var(--accent)'], out: ['出金', 'var(--sunk)', 'var(--ink)'], loan: ['利息', 'var(--gold-soft)', 'var(--gold)'] };
-    body = list.length ? `<div class="list">${list.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><span class="tag" style="background:${lab[t.type][1]};color:${lab[t.type][2]}">${lab[t.type][0]}</span><div class="main"><span class="t">${esc(t.memo || ({ in: '現金存入', out: '出金', loan: '利息' })[t.type])}</span><span class="st num">${roc(t.date)}</span></div><span class="num" style="font-weight:600">${t.type === 'in' ? '+' : '−'}${money(t.amount)}</span>${delBtn(t.id)}</div>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有存入或出金紀錄</div></div>`;
+    const list = sortTx(a.txns.filter(t => ['in', 'out', 'fxbuy', 'fxsell', 'fxint'].includes(t.type))).reverse();
+    const fxs = 'background:#E3EEFB;color:#185FA5';
+    const lab = { in: ['存入', 'background:var(--accent-soft);color:var(--accent)'], out: ['出金', 'background:var(--sunk);color:var(--ink)'], fxbuy: ['買外幣', fxs], fxsell: ['賣外幣', fxs], fxint: ['外幣息', fxs] };
+    const fxLine = t => `${FX_CURS[t.cur][0]} ${fxAmt(t.cur, t.qty)}`, fxSub = t => t.type === 'fxint' ? '利息' : '匯率 ' + fxRateTxt(t.cur, t.rate);
+    const amt = t => t.type === 'in' ? '+' + money(t.amount) : t.type === 'out' ? '−' + money(t.amount) : t.type === 'fxbuy' ? '−' + money(Math.round(t.qty * t.rate + (t.fee || 0))) : t.type === 'fxsell' ? '+' + money(Math.round(t.qty * t.rate - (t.fee || 0))) : '+' + fxAmt(t.cur, t.qty);
+    body = list.length ? `<div class="list">${list.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><span class="tag" style="${lab[t.type][1]};white-space:nowrap">${lab[t.type][0]}</span><div class="main"><span class="t">${esc(t.memo || ({ in: '現金存入', out: '出金' })[t.type] || fxLine(t))}</span><span class="st num">${roc(t.date)}${t.cur ? '・' + (t.memo ? fxLine(t) + '・' : '') + fxSub(t) : ''}</span></div><span class="num" style="font-weight:600">${amt(t)}</span>${delBtn(t.id)}</div>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有存入或出金紀錄</div></div>`;
   } else if (V.ledger === 'hold') {
     const dm = S.settings.plMode === 'div', u = dm ? m.unreal + m.divHeld : m.unreal;
     sum = (dm ? L('扣息後成本', money(m.cost - m.divHeld)) : L('持有成本', money(m.cost))) + L(dm ? '損益（含配息）' : '庫存損益', money(u, { plus: true }), cls(u), 'center') + L('報酬率', arrow(u) + pct(m.cost ? u / m.cost : 0), cls(u), 'right');
-    body = `<div class="seg pl-seg" role="group" aria-label="損益計算方式"><button data-a="plMode" data-v="raw" aria-pressed="${!dm}">未扣配息</button><button data-a="plMode" data-v="div" aria-pressed="${dm}">扣除已領配息</button></div>` + (m.todayPL ? `<div class="small" style="display:flex;justify-content:space-between;padding:0 4px"><span>今日損益 <b class="num ${cls(m.todayPL)}">${arrow(m.todayPL)}${money(m.todayPL, { plus: true })}（${pct(m.todayRet)}）</b></span></div>` : '') + holdList(m.holds, m);
+    body = `<div class="seg pl-seg" role="group" aria-label="損益計算方式"><button data-a="plMode" data-v="raw" aria-pressed="${!dm}">未扣配息</button><button data-a="plMode" data-v="div" aria-pressed="${dm}">扣除已領配息</button></div>` + (m.todayPL || m.fxPL ? `<div class="small" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:0 4px"><span>${m.todayPL ? `今日損益 <b class="num ${cls(m.todayPL)}">${arrow(m.todayPL)}${money(m.todayPL, { plus: true })}（${pct(m.todayRet)}）</b>` : ''}</span>${m.fxPL ? `<span>其中外幣匯差 <b class="num ${cls(m.fxPL)}">${money(m.fxPL, { plus: true })}</b></span>` : ''}</div>` : '') + holdList(m.holds, m);
   } else if (V.ledger === 'real') {
     const dm = S.settings.realMode === 'div', rv = r => r.pl + (dm ? r.div : 0), tot = m.real + (dm ? m.realDiv : 0);
     sum = L('投資成本', money(m.realCost)) + L(dm ? '實收（含股利）' : '實收（未含股利）', money(tot, { plus: true }), cls(tot), 'center') + L('報酬率', arrow(tot) + pct(m.realCost ? tot / m.realCost : 0), cls(tot), 'right');
     body = `<div class="seg pl-seg" role="group" aria-label="實現損益計算方式"><button data-a="realMode" data-v="raw" aria-pressed="${!dm}">未含股利</button><button data-a="realMode" data-v="div" aria-pressed="${dm}">含股利</button></div>` + (dm && m.realDiv ? `<div class="small" style="padding:0 4px">價差 ${money(m.real, { plus: true })} ＋ 持有期間股利 ${money(m.realDiv)}</div>` : '') +
       (m.realList.length ? `<div class="hold-list">${m.realList.slice().sort((x, y) => (y.last || '').localeCompare(x.last || '')).map(r => { const v = rv(r); return `
-    <button class="hold-card rowbtn ${v > 0 ? 'up' : v < 0 ? 'down' : ''}" data-a="stock" data-v="${esc(r.code)}">
+    <button class="hold-card rowbtn ${v > 0 ? 'up' : v < 0 ? 'down' : ''}" data-a="${isFX(r.code) ? 'ledger' : 'stock'}" data-v="${isFX(r.code) ? 'cash' : esc(r.code)}">
       <span class="hold-head">
-        <span class="hold-title"><span class="hold-code num">${esc(r.code)}</span><span class="hold-name">${esc(stockName(r.code))}</span>${jpTag(r.code)}</span>
-        <span class="hold-price"><span class="s">賣出日</span><b class="num" style="font-size:14px">${roc(r.last)}</b><span class="s num">${isJP(r.code) ? '台幣計' : ''}現賣均 ${grp(r.sellAmt / r.qty, 2)}／成本均 ${grp(r.cost / r.qty, 2)}</span></span>
+        <span class="hold-title"><span class="hold-code num">${esc(r.code)}</span><span class="hold-name" style="flex:0 1 auto">${esc(stockName(r.code))}</span>${jpTag(r.code)}${isFX(r.code) ? '<span class="tag fx-tag">外幣</span>' : ''}</span>
+        <span class="hold-price"><span class="s">賣出日</span><b class="num" style="font-size:14px">${roc(r.last)}</b><span class="s num">${isFX(r.code) ? `賣出匯率 ${fxRateTxt(r.code, r.sellAmt / r.qty)}／成本 ${fxRateTxt(r.code, r.cost / r.qty)}` : `${isJP(r.code) ? '台幣計' : ''}現賣均 ${grp(r.sellAmt / r.qty, 2)}／成本均 ${grp(r.cost / r.qty, 2)}`}</span></span>
       </span>
       <span class="hold-body">
-        <span class="kv"><span class="k">成交股數</span><span class="num" style="font-weight:600">${grp(r.qty)} 股</span><span class="s num">成本 ${money(r.cost)}</span></span>
+        <span class="kv"><span class="k">${isFX(r.code) ? '賣出金額' : '成交股數'}</span><span class="num" style="font-weight:600">${isFX(r.code) ? fxAmt(r.code, r.qty) : grp(r.qty) + ' 股'}</span><span class="s num">成本 ${money(r.cost)}</span></span>
         <span class="kv" style="align-items:center;text-align:center"><span class="k">${dm ? '實收（含股利）' : '實收'}</span><span class="num ${cls(v)}" style="font-weight:700;font-size:16px">${money(v, { plus: true })}</span><span class="s num">${dm && r.div ? '股利 ' + money(r.div) : '費稅 ' + money(r.fee + r.tax)}</span></span>
         <span class="kv" style="align-items:flex-end;text-align:right"><span class="k">報酬率</span><span class="num ${cls(v)}" style="font-weight:700;font-size:16px">${arrow(v)}${pct(r.cost ? v / r.cost : 0)}</span><span class="s num">${dm && r.div ? '費稅 ' + money(r.fee + r.tax) : '&nbsp;'}</span></span>
       </span>
@@ -1202,8 +1236,8 @@ function pagePlan(a, m) {
 }
 
 /* ================= 記一筆 (bottom sheet) ================= */
-const TYPES = [['buy', '買進'], ['sell', '賣出'], ['div', '配息／配股'], ['loan', '利息'], ['in', '存入'], ['out', '出金']];
-const GROUPS = { money: ['資金', ['in', 'out']], trade: ['股票交易', ['buy', 'sell']], div: ['股利', ['div']] };
+const TYPES = [['buy', '買進'], ['sell', '賣出'], ['div', '配息／配股'], ['loan', '利息'], ['in', '存入'], ['out', '出金'], ['fxbuy', '買進'], ['fxsell', '賣出'], ['fxint', '利息']];
+const GROUPS = { money: ['資金', ['in', 'out']], trade: ['股票交易', ['buy', 'sell']], div: ['股利', ['div']], fx: ['外幣', ['fxbuy', 'fxsell', 'fxint']] };
 const groupOf = t => Object.keys(GROUPS).find(g => GROUPS[g][1].includes(t)) || 'trade';
 function contextType() {
   if (V.page === 'stock') return 'buy';
@@ -1228,7 +1262,8 @@ function openEdit(id) {
     sh.type = 'div'; sh.filledFor = t.code; if (t.shares) sh.f.held = String(t.shares);
     if (t.type === 'cash') { sh.f.per = t.perShare != null ? String(t.perShare) : ''; sh.f.perStock = ''; sh.cashTouched = true; sh.f.cash = String(origOf(t)); sh.otherTouched = true; sh.f.other = String(t.other || 0); sh.f.interest = t.interest ? String(t.interest) : ''; if (isJP(t.code)) { sh.wtaxTouched = true; sh.f.wtax = String(t.wtax || 0); if (t.fx) sh.f.fx = String(t.fx); } }
     else { delete sh.f.held; sh.f.per = ''; sh.f.perStock = t.perShare != null ? String(t.perShare) : ''; sh.sshTouched = true; sh.f.stockSh = String(t.shares); sh.cashTouched = true; sh.f.cash = ''; }
-  } else sh.f.amount = String(t.amount);
+  } else if (t.type.startsWith('fx')) { sh.cur = t.cur; sh.f.fqty = String(t.qty); if (t.rate) sh.f.fxrate = String(t.rate); if (t.fee) sh.f.fee = String(t.fee); }
+  else sh.f.amount = String(t.amount);
   V.sheet = sh; render();
 }
 function sheetAcc() { return S.accounts.find(x => x.id === V.sheet.accId) || acc(); }
@@ -1323,6 +1358,16 @@ function renderSheetInner(only) {
       ${memoF('例：115 年 11 月配息')}
       <button class="btn ghost" data-a="divQuery" style="color:var(--ex);font-size:17px">查詢／試算股利</button>
       ${evNote ? `<p class="small" style="margin:0">${evNote}</p>` : ''}`;
+  } else if (t.startsWith('fx')) {
+    const cur = sh.cur || 'USD', q = num(f.fqty), r = f.fxrate != null && f.fxrate !== '' ? num(f.fxrate) : fxRate(cur), fee = num(f.fee);
+    const held = (compute(a).holds.find(h => h.code === cur) || {}).shares || 0;
+    const net = t === 'fxbuy' ? -(q * r + fee) : t === 'fxsell' ? q * r - fee : 0;
+    body = `${segBar(Object.entries(FX_CURS).map(([c, [n]]) => [c, n + ' ' + c]), cur, 'fxcur')}
+      <div class="grid2">${field('x-fqty', `${t === 'fxint' ? '利息' : '金額'}（${FX_CURS[cur][0]}）`, inp('x-fqty', 'fqty', f.fqty, 'class="bignum" type="text" inputmode="decimal" placeholder="0"'), 'focus')}${dateF()}</div>
+      ${t === 'fxint' ? '' : `<div class="grid2">${field('x-fxrate', '成交匯率（1 ' + FX_CURS[cur][0] + '＝台幣）', inp('x-fxrate', 'fxrate', f.fxrate ?? fxRateTxt(cur, fxRate(cur)).replace(/,/g, ''), 'class="num" type="text" inputmode="decimal"'))}${field('x-fee', '手續費（台幣）', inp('x-fee', 'fee', f.fee, 'class="num" type="text" inputmode="numeric" placeholder="0"'))}</div>`}
+      <div class="card pad" data-live="fxnet" style="background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px">${t === 'fxint' ? `<span class="small">利息會加進持有的${FX_CURS[cur][0]}，以零成本計入</span><b class="num">+${fxAmt(cur, q)}</b>` : `<span class="k">${t === 'fxbuy' ? '從台幣餘額扣除' : '存回台幣餘額'}</span><b class="num ${net < 0 ? '' : 'up'}" style="font-size:22px">${net < 0 ? '−' : '+'}$${grp(Math.abs(Math.round(net)))}</b>`}</div>
+      <p class="small" style="margin:0">目前持有 ${fxAmt(cur, held)}・今日匯率 ${fxRateTxt(cur, fxRate(cur))}（${esc((MARKET && MARKET.fx && MARKET.fx.src) || '每日更新')}）。匯率可改成銀行實際成交的匯率。</p>
+      ${memoF(t === 'fxint' ? '例：美元定存 11 月利息' : '')}`;
   } else {
     const est = 0;
     body = `<div class="grid2">${field('x-amt', ({ in: '存入金額', out: '出金金額', loan: '利息' })[t], inp('x-amt', 'amount', f.amount ?? (t === 'loan' && est ? est : ''), 'class="bignum" type="text" inputmode="numeric" placeholder="0"'), 'focus')}${dateF(t === 'loan' ? '扣款日期' : '日期')}</div>
@@ -1379,6 +1424,17 @@ function saveSheet() {
     const ev = sh.ev && sh.filledFor === code ? sh.ev : null;
     if (d.cash > 0) txs.push(Object.assign({ id: uid(), type: 'cash', code, shares: d.held, perShare: d.per || undefined, gross: d.cash, other: d.other, amount: d.cash - d.other - d.wtax, interest: d.interest, wtax: d.jp ? d.wtax : undefined, fx: d.jp ? (num(f.fx) || jpyRate()) : undefined, ev: ev ? ev.id : undefined }, base));
     if (d.stockSh > 0) txs.push(Object.assign({ id: uid(), type: 'stock', code, shares: d.stockSh, perShare: d.perStock || undefined, ev: ev ? ev.id : undefined }, base));
+  } else if (t.startsWith('fx')) {
+    const cur = sh.cur || 'USD', qty = num(f.fqty);
+    if (!(qty > 0)) return toast('請填外幣金額');
+    const tx = Object.assign({ id: uid(), type: t, cur, qty }, base);
+    if (t !== 'fxint') {
+      tx.rate = f.fxrate != null && f.fxrate !== '' ? num(f.fxrate) : +fxRate(cur).toFixed(cur === 'JPY' ? 4 : 2);
+      if (!(tx.rate > 0)) return toast('請填匯率');
+      tx.fee = num(f.fee) || 0;
+      if (t === 'fxsell') { const held = (m.holds.find(h => h.code === cur) || {}).shares || 0; if (qty > held + 1e-6 && !(sh.editId)) return toast(`目前只持有 ${fxAmt(cur, held)}`); }
+    }
+    txs.push(tx);
   } else {
     const amount = num(f.amount); if (!(amount > 0)) return toast('請填金額');
     txs.push(Object.assign({ id: uid(), type: t, amount }, base));
@@ -1521,6 +1577,7 @@ document.addEventListener('click', e => {
     case 'sgroup': V.sheet.cashTouched = V.sheet.sshTouched = V.sheet.otherTouched = false; V.sheet.ev = null; V.sheet.filledFor = null; V.sheet.type = GROUPS[v][1][0]; V.sheet.f = {}; V.sheet.feeTouched = V.sheet.taxTouched = false; break;
     case 'stype': V.sheet.ev = null; V.sheet.filledFor = null; V.sheet.type = v; V.sheet.f = {}; V.sheet.feeTouched = V.sheet.taxTouched = false; break;
     case 'unit': V.sheet.unit = v; break;
+    case 'fxcur': V.sheet.cur = v; delete V.sheet.f.fxrate; break;
     case 'save': saveSheet(); return;
     case 'planM': V.plan.m = +v; break;
     case 'planRe': V.plan.re = !V.plan.re; break;
@@ -1542,7 +1599,7 @@ document.addEventListener('input', e => {
     else if (k === 'rate') { sh.rate = num(el.value); sh.feeTouched = false; refreshSheetTotals(); return; }
     else if (k === 'date') { sh.date = el.value; if (sh.type === 'div') refreshSheetTotals(); }
     else { sh.f[k] = el.value; if (k === 'fee') sh.feeTouched = true; if (k === 'tax') sh.taxTouched = true; if (k === 'cash') sh.cashTouched = el.value !== ''; if (k === 'stockSh') sh.sshTouched = el.value !== ''; if (k === 'other') sh.otherTouched = el.value !== ''; if (k === 'wtax') sh.wtaxTouched = el.value !== ''; }
-    if (['qty', 'price', 'fee', 'tax', 'per', 'perStock', 'held', 'shares', 'cash', 'stockSh', 'other', 'interest', 'wtax', 'fx'].includes(k)) { refreshSheetTotals(el); }
+    if (['qty', 'price', 'fee', 'tax', 'per', 'perStock', 'held', 'shares', 'cash', 'stockSh', 'other', 'interest', 'wtax', 'fx', 'fqty', 'fxrate'].includes(k)) { refreshSheetTotals(el); }
   }
 });
 document.addEventListener('change', e => {
