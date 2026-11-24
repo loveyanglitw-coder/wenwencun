@@ -173,6 +173,7 @@ nav.tabs .plus{justify-self:center;width:52px;height:52px;border-radius:18px;bac
 .lr b{font:500 14px var(--f-num)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .jp-tag{display:inline-block;min-width:0;height:auto;line-height:1.5;font-weight:600;background:#fde8e8;color:#c0392b;margin-left:6px;font-size:11px;padding:1px 6px;border-radius:999px;vertical-align:middle;white-space:nowrap}
+.freq-tag{flex:none;font-size:12px;font-weight:500;color:var(--accent);background:var(--accent-soft);border:none;border-radius:999px;padding:1px 8px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -854,12 +855,12 @@ function holdList(holds, m) {
   return `<div class="hold-list">${holds.map(h => { const pl = dm ? h.plD : h.pl, ret = dm ? h.retD : h.ret, ann = dm ? h.annD : h.ann; return `
     <button class="hold-card rowbtn ${pl > 0 ? 'up' : pl < 0 ? 'down' : ''}" data-a="stock" data-v="${esc(h.code)}">
       <span class="hold-head">
-        <span class="hold-title"><span class="hold-code num">${esc(h.code)}</span><span class="hold-name">${esc(h.name)}</span>${jpTag(h.code)}</span>
+        <span class="hold-title"><span class="hold-code num">${esc(h.code)}</span><span class="hold-name" style="flex:0 1 auto">${esc(h.name)}</span>${h.freq ? `<span class="freq-tag">${esc(h.freq)}</span>` : ''}${jpTag(h.code)}</span>
         ${h.y ? `<span class="hold-price"><span class="s">現價</span><b class="num ${cls(h.y.chg)}">${jpPx(h.y.price)}</b><span class="num ${cls(h.y.chg)}">${h.y.chg ? arrow(h.y.chg) + (h.y.chg > 0 ? '+' : '−') + grp(Math.abs(h.y.chg), 1) + '（' + pct(h.y.chg / (h.y.price - h.y.chg)) + '）' : '—'}</span></span>` : `<span class="hold-price"><span class="s">現價</span><b class="num ${cls(h.chg)}">${grp(h.price, 2)}</b><span class="num ${cls(h.chg)}">${h.chg ? arrow(h.chg) + (h.chg > 0 ? '+' : '−') + grp(Math.abs(h.chg), 2) + '（' + pct(h.chg / (h.price - h.chg)) + '）' : '—'}</span></span>`}
       </span>
       <span class="hold-body">
         <span class="kv"><span class="k">庫存（佔 ${grp(m.mv ? h.mv / m.mv * 100 : 0, 1)}%）</span><span class="num" style="font-weight:600">${grp(h.shares)} 股</span><span class="s num">${h.y ? '市值 ' + yen(h.y.mv) + '<br>≈ ' + money(h.mv) : '市值 ' + money(h.mv)}</span></span>
-        <span class="kv" style="align-items:center;text-align:center"><span class="k">${dm ? '損益（含配息）' : '損益試算'}</span><span class="num ${cls(pl)}" style="font-weight:700;font-size:16px">${money(pl, { plus: true })}</span><span class="s num">${h.y && !dm ? '日圓 ' + yen(h.y.pl, true) + '（含匯差）' : dm ? '已領配息 ' + money(h.divRecv) : esc(h.freq || '未設定配息頻率')}</span></span>
+        <span class="kv" style="align-items:center;text-align:center"><span class="k">${dm ? '損益（含配息）' : '損益試算'}</span><span class="num ${cls(pl)}" style="font-weight:700;font-size:16px">${money(pl, { plus: true })}</span><span class="s num">${h.y && !dm ? '日圓 ' + yen(h.y.pl, true) + '（含匯差）' : dm ? '已領配息 ' + money(h.divRecv) : ''}</span></span>
         <span class="kv" style="align-items:flex-end;text-align:right"><span class="k">報酬率</span><span class="num ${cls(pl)}" style="font-weight:700;font-size:16px">${arrow(pl)}${pct(ret)}</span><span class="s num">年化 ${pct(ann, 1)}</span></span>
       </span>
     </button>`; }).join('')}</div>`;
