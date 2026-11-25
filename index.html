@@ -821,9 +821,11 @@ function targetCard(a, m) {
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-weight:500">目標張數</b><button class="btn small ghost" data-a="tgtEdit">${ed ? '完成' : '編輯'}</button></div>
     ${ed ? rows : `<div class="tgt-track" data-n="${T.length}">${rows}</div>${T.length > 1 ? `<div class="tgt-dots" aria-hidden="true">${T.map((_, i) => `<span class="${i === (V.tgtIdx || 0) % T.length ? 'on' : ''}"></span>`).join('')}</div>` : ''}`}${add}</div>`;
 }
+// 每月股息目標：每個帳戶各自設定；還沒設定過的帳戶沿用舊的共用目標
+const goalOf = a => a && a.goal != null ? a.goal : S.settings.goal;
 function pageHome(a, m) {
-  const prog = S.settings.goal ? Math.min(1, Math.max(0, m.monthAvg / S.settings.goal)) : 0;
-  const yearsToGoal = planYears(m.mv, V.plan.m, m.mv ? m.div12 / m.mv : 0.05, V.plan.g / 100, true, S.settings.goal);
+  const goal = goalOf(a), prog = goal ? Math.min(1, Math.max(0, m.monthAvg / goal)) : 0;
+  const yearsToGoal = planYears(m.mv, V.plan.m, m.mv ? m.div12 / m.mv : 0.05, V.plan.g / 100, true, goal);
   const freq = { 月配: 0, 雙月配: 0, 季配: 0, 半年配: 0, 年配: 0 };
   m.holds.forEach(h => { if (freq[h.freq] != null) freq[h.freq]++; });
   const pdate = m.holds.map(h => (S.stocks[h.code] || {}).pdate).filter(Boolean).sort().pop();
@@ -860,7 +862,7 @@ ${V.heroView === 'acct' ? `    <div><div class="lbl">帳戶現值（含帳戶餘
   ${pendingCard(a, true)}
   ${requestCard()}
   <button class="card pad rowbtn" data-a="go" data-v="plan" style="display:flex;flex-direction:column;gap:8px">
-    <span style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b style="font-weight:500">財務自由進度</b><span class="small">今年淨股息月均 <b class="gold num" style="font-size:15px">${money(m.monthAvg)}</b> / 目標 ${money(S.settings.goal, { show: true })}</span></span>
+    <span style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b style="font-weight:500">財務自由進度</b><span class="small">今年淨股息月均 <b class="gold num" style="font-size:15px">${money(m.monthAvg)}</b> / 目標 ${money(goal, { show: true })}</span></span>
     <span class="bar"><span style="width:${(prog * 100).toFixed(1)}%"></span></span>
     <span class="small">已達 ${grp(prog * 100, 1)}%${yearsToGoal != null ? `・每月投入 ${money(V.plan.m, { show: true })} 約 ${grp(yearsToGoal, 1)} 年達成` : ''} ›</span>
   </button>
@@ -1217,7 +1219,7 @@ function pageAccounts(a0, m0) {
     ${sharedListCard()}
     <div class="h2row"><h2>設定</h2></div>
     <div class="list">
-      <div class="row"><div class="main"><span style="font-size:15px">每月股息目標</span></div><input class="num" style="width:110px;text-align:right;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card)" type="number" inputmode="numeric" value="${S.settings.goal}" data-f="goal" aria-label="每月股息目標"></div>
+      <div class="row"><div class="main"><span style="font-size:15px">每月股息目標（${esc(acc().name)}）</span><span class="st">每個帳戶各自設定，切換帳戶後在這裡改</span></div><input class="num" style="width:110px;text-align:right;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card)" type="number" inputmode="numeric" value="${goalOf(acc())}" data-f="goal" aria-label="${esc(acc().name)} 的每月股息目標"></div>
       <div class="row"><div class="main"><span style="font-size:15px">股利匯費</span><span class="st">自動入帳時扣除</span></div><input class="num" style="width:80px;text-align:right;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card)" type="number" inputmode="numeric" value="${S.settings.remit}" data-f="remit" aria-label="股利匯費"></div>
       <div class="row"><div class="main"><span style="font-size:15px">股利入帳方式</span><span class="st">${S.settings.divMode === 'auto' ? '發放日自動入帳（利息需事後補填）' : '公告後列入「待確認」，你填利息後按完成入帳'}</span></div><button class="btn small" data-a="divMode">${S.settings.divMode === 'auto' ? '自動入帳' : '待確認'}</button></div>
       ${sw('nhiOn', S.settings.nhiOn, '扣二代健保補充保費', '單筆股利滿 $20,000 扣 2.11%')}
@@ -1239,7 +1241,7 @@ function planYears(P, M, yld, g, re, goal) {
 function pagePlan(a, m) {
   const yldDef = m.mv && m.div12 ? m.div12 / m.mv * 100 : 5;
   const y = V.plan.y != null ? V.plan.y : +yldDef.toFixed(2);
-  const P = m.mv, M = V.plan.m, g = V.plan.g / 100, re = V.plan.re, goal = S.settings.goal, yld = y / 100;
+  const P = m.mv, M = V.plan.m, g = V.plan.g / 100, re = V.plan.re, goal = goalOf(a), yld = y / 100;
   const yrs = planYears(P, M, yld, g, re, goal);
   const span = Math.min(40, Math.max(10, Math.ceil((yrs || 30) + 2)));
   const my = yld / 12, mg = Math.pow(1 + g, 1 / 12) - 1; let A = P; const pts = [A * my];
@@ -1658,7 +1660,7 @@ document.addEventListener('change', e => {
   if (mode === 'demo' && ['price', 'freq'].includes(f)) { const st = S.stocks[V.code]; if (f === 'price') { st.price = num(v); st.chg = 0; } else st.freq = v; render(); toast('範例資料的變更不會儲存'); return; }
   if (f === 'price') { const st = S.stocks[V.code]; st.price = num(v); st.chg = 0; st.pdate = todayISO(); toast('已更新現價'); }
   else if (f === 'freq') S.stocks[V.code].freq = v;
-  else if (f === 'goal') S.settings.goal = Math.max(0, num(v));
+  else if (f === 'goal') acc().goal = Math.max(0, num(v));
   else if (f === 'tgtLots') { const t = (acc().targets || [])[+el.dataset.i]; if (t && num(v) > 0) t.lots = num(v); }
   else if (f === 'remit') S.settings.remit = Math.max(0, num(v));
   else if (f.startsWith('acc')) {
