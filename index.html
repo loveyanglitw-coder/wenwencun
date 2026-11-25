@@ -180,6 +180,7 @@ nav.tabs .plus{justify-self:center;width:52px;height:52px;border-radius:18px;bac
 .tgt-row{display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid var(--line2)}.tgt-row:first-of-type{border-top:0;padding-top:0}.tgt-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tgt-inp{width:84px;text-align:right;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card);color:var(--ink);font-size:16px}
 #tgt-sugg{right:auto;width:min(340px,calc(100vw - 64px))}#tgt-sugg span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hseg{display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(255,255,255,.08);align-self:flex-start}.hseg button{border:0;background:none;color:rgba(255,255,255,.62);font:inherit;font-size:14px;font-weight:600;padding:7px 16px;border-radius:999px;cursor:pointer;min-height:36px}.hseg button.on{background:rgba(255,255,255,.18);color:#fff}
+.tgt-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:12px;margin:0 -2px;padding:0 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.tgt-track::-webkit-scrollbar{display:none}.tgt-slide{flex:0 0 100%;min-width:0;scroll-snap-align:start;display:flex;flex-direction:column;gap:8px}.tgt-dots{display:flex;justify-content:center;gap:6px;margin-top:-2px}.tgt-dots span{width:6px;height:6px;border-radius:50%;background:var(--line)}.tgt-dots span.on{background:var(--accent);width:16px;border-radius:3px}
 </style>
 </head>
 <body>
@@ -780,6 +781,7 @@ function render() {
   else html = ({ home: pageHome, ledger: pageLedger, hist: pageHist, cal: pageCal })[V.tab](a, m);
   painting = true; try { $('#app').innerHTML = banner() + html; } finally { painting = false; }
   renderNav();
+  const tt = $('.tgt-track'); if (tt && V.tgtIdx) { tt.style.scrollBehavior = 'auto'; tt.scrollLeft = Math.min(V.tgtIdx, (+tt.dataset.n || 1) - 1) * (tt.clientWidth + 12); }
   if (V.sheet) renderSheet(); else $('#sheetRoot').innerHTML = '';
 }
 function banner() {
@@ -809,14 +811,15 @@ function targetCard(a, m) {
     const have = h ? h.shares / u : 0, p = t.lots ? Math.min(1, have / t.lots) : 0, left = Math.max(0, t.lots - have);
     const st = S.stocks[t.code] || {}, px = st.price != null ? st.price * (isJP(t.code) ? jpyRate() : 1) : null;
     if (ed) return `<div class="tgt-row"><div class="tgt-name"><b class="num">${esc(t.code)}</b> ${esc(stockName(t.code))}${jpTag(t.code)}</div><div style="display:flex;align-items:center;gap:6px"><span class="small">目標</span><input class="num tgt-inp" type="number" inputmode="decimal" min="0" step="any" value="${t.lots}" data-f="tgtLots" data-i="${i}" aria-label="${esc(t.code)} 目標張數"><span class="small">${w}</span><button class="btn small ghost" data-a="tgtDel" data-v="${i}">移除</button></div></div>`;
-    return `<div class="tgt-row"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="tgt-name"><b class="num">${esc(t.code)}</b> ${esc(stockName(t.code))}${jpTag(t.code)}</span><span class="num" style="white-space:nowrap"><b style="font-size:16px">${lotTxt(have)}</b> / ${lotTxt(t.lots)} ${w}</span></div>
+    return `<div class="tgt-slide" role="group" aria-label="${i + 1} / ${T.length}"><div class="tgt-name"><b class="num">${esc(t.code)}</b> ${esc(stockName(t.code))}${jpTag(t.code)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span class="num"><b style="font-size:28px">${lotTxt(have)}</b><span class="small"> / ${lotTxt(t.lots)} ${w}</span></span><b class="num" style="font-size:18px;color:var(--accent)">${left <= 1e-9 ? '達成' : grp(p * 100, 1) + '%'}</b></div>
       <span class="bar"><span style="width:${(p * 100).toFixed(1)}%"></span></span>
-      <span class="small">${left <= 1e-9 ? '已達成目標' : `已達 ${grp(p * 100, 1)}%・還差 ${lotTxt(left)} ${w}${px ? `，以現價 ${grp(px, 2)} 約需 ${money(Math.round(left * u * px), { show: true })}` : ''}`}</span></div>`;
+      <span class="small">${left <= 1e-9 ? '已達成目標' : `還差 ${lotTxt(left)} ${w}${px ? `，以現價 ${grp(px, 2)} 約需 ${money(Math.round(left * u * px), { show: true })}` : ''}`}</span></div>`;
   }).join('');
   const add = ed ? `<div class="tgt-row tgt-add"><span class="small">新增標的</span><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="pick-wrap" style="position:relative;flex:1 1 150px;min-width:130px"><input id="tgt-code" class="num tgt-inp" style="width:100%;text-align:left" placeholder="代號或名稱" autocomplete="off" autocapitalize="characters" aria-label="股票代號或名稱"><div id="tgt-sugg" class="sugg" role="listbox" hidden></div></span><input id="tgt-lots" class="num tgt-inp" type="number" inputmode="decimal" min="0" step="any" placeholder="100" aria-label="目標張數"><span class="small">張</span><button class="btn small" data-a="tgtAdd">新增</button></div><span class="small">日股請輸入代號加 .T（例：7203.T），單位為 100 股</span></div>` : '';
   return `<div class="card pad" style="display:flex;flex-direction:column;gap:12px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-weight:500">目標張數</b><button class="btn small ghost" data-a="tgtEdit">${ed ? '完成' : '編輯'}</button></div>
-    ${rows || (ed ? '' : '')}${add}</div>`;
+    ${ed ? rows : `<div class="tgt-track" data-n="${T.length}">${rows}</div>${T.length > 1 ? `<div class="tgt-dots" aria-hidden="true">${T.map((_, i) => `<span class="${i === (V.tgtIdx || 0) % T.length ? 'on' : ''}"></span>`).join('')}</div>` : ''}`}${add}</div>`;
 }
 function pageHome(a, m) {
   const prog = S.settings.goal ? Math.min(1, Math.max(0, m.monthAvg / S.settings.goal)) : 0;
@@ -1713,6 +1716,12 @@ function showSugg(q) {
   box.innerHTML = list.map((x, i) => `<button type="button" role="option" data-pick="${esc(x.code)}" class="${i === 0 ? 'on' : ''}"><b>${hl(x.code, q.trim())}</b><span>${hl(x.name, q.trim())}</span>${isJP(x.code) ? '<span class="tag jp-tag">日股</span>' : ''}${x.held ? '<span class="tag">持有中</span>' : ''}</button>`).join('');
   box.hidden = false;
 }
+// 目標張數左右滑：更新圓點、記住目前位置
+document.addEventListener('scroll', e => {
+  const tr = e.target; if (!tr.classList || !tr.classList.contains('tgt-track')) return;
+  const i = Math.round(tr.scrollLeft / Math.max(1, tr.clientWidth + 12)); V.tgtIdx = i;
+  const dots = tr.parentElement.querySelectorAll('.tgt-dots span'); dots.forEach((d, j) => d.classList.toggle('on', j === i));
+}, true);
 // 目標張數：代號欄的關鍵字建議（代號或名稱）
 function tgtSugg(q) {
   const box = $('#tgt-sugg'); if (!box) return;
