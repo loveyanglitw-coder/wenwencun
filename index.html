@@ -179,6 +179,7 @@ nav.tabs .plus{justify-self:center;width:52px;height:52px;border-radius:18px;bac
 .hold-card.fx-card{border-left-color:#378ADD}
 .tgt-row{display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid var(--line2)}.tgt-row:first-of-type{border-top:0;padding-top:0}.tgt-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tgt-inp{width:84px;text-align:right;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card);color:var(--ink);font-size:16px}
 #tgt-sugg{right:auto;width:min(340px,calc(100vw - 64px))}#tgt-sugg span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hseg{display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(255,255,255,.08);align-self:flex-start}.hseg button{border:0;background:none;color:rgba(255,255,255,.62);font:inherit;font-size:14px;font-weight:600;padding:7px 16px;border-radius:999px;cursor:pointer;min-height:36px}.hseg button.on{background:rgba(255,255,255,.18);color:#fff}
 </style>
 </head>
 <body>
@@ -302,7 +303,7 @@ let S = demoState();
 let painting = false;
 let mode = 'demo';     // demo | saved | local
 let store = null;      // {kind:'db', ref} | {kind:'local'}
-const V = { tab: 'home', page: null, code: null, ledger: 'hold', hist: 'chart', calView: 'cal', calMonth: todayISO().slice(0, 7), calOn: { ex: true, pay: true }, metric: 'div', openAcc: null, budget: 10000, plan: { m: 10000, y: null, g: 2, re: true }, armed: null };
+const V = { heroView: (() => { try { return localStorage.getItem('wwc-hero') === 'acct' ? 'acct' : 'stock'; } catch (x) { return 'stock'; } })(), tab: 'home', page: null, code: null, ledger: 'hold', hist: 'chart', calView: 'cal', calMonth: todayISO().slice(0, 7), calOn: { ex: true, pay: true }, metric: 'div', openAcc: null, budget: 10000, plan: { m: 10000, y: null, g: 2, re: true }, armed: null };
 try { const t = localStorage.getItem('wwc-tab'); if (['home', 'ledger', 'hist', 'cal'].includes(t)) V.tab = t; } catch (e) {}
 
 const acc = () => S.accounts.find(a => a.id === S.cur) || S.accounts[0];
@@ -831,7 +832,16 @@ function pageHome(a, m) {
   </div>
   ${fxNote()}
   <section class="hero">
-    <div><div class="lbl">總價值（股票市值）</div><div class="big">${money(m.mv)}</div><div class="lbl" style="font-size:12px">${pdate ? '股價 ' + roc(pdate) : '尚未有股價'}${m.todayPL ? `・今日 <span class="${m.todayPL > 0 ? 'upc' : 'downc'} num">${arrow(m.todayPL)}${money(m.todayPL, { plus: true })}</span>` : ''}</div></div>
+    <div class="hseg" role="tablist">${[['stock', '股票'], ['acct', '帳戶資金']].map(([k, n]) => `<button role="tab" aria-selected="${V.heroView === k}" class="${V.heroView === k ? 'on' : ''}" data-a="heroView" data-v="${k}">${n}</button>`).join('')}</div>
+${V.heroView === 'acct' ? `    <div><div class="lbl">帳戶現值（含帳戶餘額）</div><div class="big">${money(m.value)}</div><div class="lbl" style="font-size:12px">帳戶淨值 <span class="num">${money(m.netValue)}</span>・扣除預估賣出費用</div></div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="hrow"><span>投資總額（存入−出金）</span><span class="num">${money(m.invest)}</span></div>
+      <div class="hrow"><span>帳戶餘額${m.balance < 0 ? '<span style="font-size:11px;opacity:.7">（負數＝已動用質押借款）</span>' : ''}</span><span class="num ${m.balance < 0 ? 'downc' : ''}">${money(m.balance)}</span></div>
+    </div>
+    <div class="tiles">
+      <button class="tile" data-a="tab" data-v="ledger"><span class="small">股票損益</span><span class="v num ${cls(m.stockPL)}" style="font-size:clamp(17px,5.2vw,21px);white-space:nowrap">${arrow(m.stockPL)}${money(m.stockPL, { plus: true })}</span><span class="small num">${pct(m.stockRet)}・年化 ${pct(m.stockAnn)}</span></button>
+      <button class="tile" data-a="tab" data-v="ledger"><span class="small">總損益（含息）</span><span class="v num ${cls(m.total)}" style="font-size:clamp(17px,5.2vw,21px);white-space:nowrap">${arrow(m.total)}${money(m.total, { plus: true })}</span><span class="small num">${pct(m.totalRet)}・年化 ${pct(m.totalAnn)}</span></button>
+    </div>` : `    <div><div class="lbl">總價值（股票市值）</div><div class="big">${money(m.mv)}</div><div class="lbl" style="font-size:12px">${pdate ? '股價 ' + roc(pdate) : '尚未有股價'}${m.todayPL ? `・今日 <span class="${m.todayPL > 0 ? 'upc' : 'downc'} num">${arrow(m.todayPL)}${money(m.todayPL, { plus: true })}</span>` : ''}</div></div>
     <div style="display:flex;flex-direction:column;gap:8px">
       <div class="hrow"><span>總成本</span><span class="num">${money(m.cost)}</span></div>
       <div class="hrow"><span>未實現損益</span><span style="display:flex;gap:8px;align-items:center"><span class="pill ${cls(m.unreal)}">${arrow(m.unreal)}${pct(m.unrealRet)}</span><span class="num ${m.unreal > 0 ? 'upc' : m.unreal < 0 ? 'downc' : ''}">${money(m.unreal, { plus: true })}</span></span></div>
@@ -842,7 +852,7 @@ function pageHome(a, m) {
     <div class="tiles">
       <button class="tile" data-a="tab" data-v="hist"><span class="small">累計股息（最後股利）</span><span class="v gold">${money(m.netDiv)}</span><span class="small num">原始 ${money(m.origSum)}</span><span class="small num">利息 ${money(m.loanSum)}</span></button>
       <button class="tile" data-a="tab" data-v="hist"><span class="small">領息次數</span><span class="v">${m.divCount} 次</span><span class="small">近 12 月股息 ${money(m.div12)}</span></button>
-    </div>
+    </div>`}
   </section>
   ${pendingCard(a, true)}
   ${requestCard()}
@@ -852,15 +862,6 @@ function pageHome(a, m) {
     <span class="small">已達 ${grp(prog * 100, 1)}%${yearsToGoal != null ? `・每月投入 ${money(V.plan.m, { show: true })} 約 ${grp(yearsToGoal, 1)} 年達成` : ''} ›</span>
   </button>
   ${TGT_ON ? targetCard(a, m) : ''}
-  <div class="h2row"><h2>帳戶資金</h2><span class="small">含存入、出金、股息與利息</span></div>
-  <div class="card pad grid2">
-    ${kv('投資總額（存入−出金）', money(m.invest))}
-    ${kv('帳戶餘額', money(m.balance), '', m.balance < 0 ? '負數＝已動用質押借款' : '')}
-    ${kv('帳戶現值', money(m.value))}
-    ${kv('帳戶淨值', money(m.netValue), '', '扣除預估賣出費用')}
-    ${kv('股票損益', arrow(m.stockPL) + money(m.stockPL, { plus: true }), cls(m.stockPL), pct(m.stockRet) + '・年化 ' + pct(m.stockAnn))}
-    ${kv('總損益（含息）', arrow(m.total) + money(m.total, { plus: true }), cls(m.total), pct(m.totalRet) + '・年化 ' + pct(m.totalAnn))}
-  </div>
   <div class="h2row"><h2>配息頻率</h2></div>
   <div class="card" style="padding:14px 8px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));text-align:center">
     ${Object.entries(freq).map(([k, n]) => `<div><div class="small">${k}</div><div class="num" style="font-weight:700;font-size:24px;color:${n ? 'var(--accent)' : 'var(--line)'}">${n}</div></div>`).join('')}
@@ -1497,6 +1498,7 @@ document.addEventListener('click', e => {
   const a = el.dataset.a, v = el.dataset.v;
   if (a !== 'del' && a !== 'logout') V.armed = null;
   switch (a) {
+    case 'heroView': V.heroView = v; try { localStorage.setItem('wwc-hero', v); } catch (x) {} break;
     case 'tgtEdit': V.tgtEdit = !V.tgtEdit; break;
     case 'tgtDel': { const a0 = acc(); a0.targets = (a0.targets || []).filter((_, i) => i !== +v); persist(); break; }
     case 'tgtAdd': {
