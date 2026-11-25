@@ -178,6 +178,7 @@ nav.tabs .plus{justify-self:center;width:52px;height:52px;border-radius:18px;bac
 .fx-tag{display:inline-block;min-width:0;height:auto;line-height:1.5;font-weight:600;background:#E3EEFB;color:#185FA5;margin-left:6px;font-size:11px;padding:1px 6px;border-radius:999px;vertical-align:middle;white-space:nowrap}
 .hold-card.fx-card{border-left-color:#378ADD}
 .tgt-row{display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid var(--line2)}.tgt-row:first-of-type{border-top:0;padding-top:0}.tgt-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tgt-inp{width:84px;text-align:right;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--card);color:var(--ink);font-size:16px}
+#tgt-sugg{right:auto;width:min(340px,calc(100vw - 64px))}#tgt-sugg span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -811,7 +812,7 @@ function targetCard(a, m) {
       <span class="bar"><span style="width:${(p * 100).toFixed(1)}%"></span></span>
       <span class="small">${left <= 1e-9 ? '已達成目標' : `已達 ${grp(p * 100, 1)}%・還差 ${lotTxt(left)} ${w}${px ? `，以現價 ${grp(px, 2)} 約需 ${money(Math.round(left * u * px), { show: true })}` : ''}`}</span></div>`;
   }).join('');
-  const add = ed ? `<div class="tgt-row tgt-add"><span class="small">新增標的</span><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input id="tgt-code" class="num tgt-inp" style="width:110px;text-align:left" placeholder="00403A" autocomplete="off" autocapitalize="characters" aria-label="股票代號"><input id="tgt-lots" class="num tgt-inp" type="number" inputmode="decimal" min="0" step="any" placeholder="100" aria-label="目標張數"><span class="small">張</span><button class="btn small" data-a="tgtAdd">新增</button></div><span class="small">日股請輸入代號加 .T（例：7203.T），單位為 100 股</span></div>` : '';
+  const add = ed ? `<div class="tgt-row tgt-add"><span class="small">新增標的</span><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="pick-wrap" style="position:relative;flex:1 1 150px;min-width:130px"><input id="tgt-code" class="num tgt-inp" style="width:100%;text-align:left" placeholder="代號或名稱" autocomplete="off" autocapitalize="characters" aria-label="股票代號或名稱"><div id="tgt-sugg" class="sugg" role="listbox" hidden></div></span><input id="tgt-lots" class="num tgt-inp" type="number" inputmode="decimal" min="0" step="any" placeholder="100" aria-label="目標張數"><span class="small">張</span><button class="btn small" data-a="tgtAdd">新增</button></div><span class="small">日股請輸入代號加 .T（例：7203.T），單位為 100 股</span></div>` : '';
   return `<div class="card pad" style="display:flex;flex-direction:column;gap:12px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-weight:500">目標張數</b><button class="btn small ghost" data-a="tgtEdit">${ed ? '完成' : '編輯'}</button></div>
     ${rows || (ed ? '' : '')}${add}</div>`;
@@ -1674,7 +1675,7 @@ document.addEventListener('keydown', e => {
 const POPULAR = ['0050', '0056', '00878', '00919', '00929', '00940', '00713', '006208', '00692', '2330', '2412', '2886', '2891', '2884', '5880', '00400A', '00403A'];
 function suggestCodes(q) {
   q = String(q || '').trim(); if (!q) return [];
-  const Q = q.toUpperCase(), a = sheetAcc(), held = new Set(compute(a).holds.map(h => h.code)), mine = new Set(Object.keys(S.stocks));
+  const Q = q.toUpperCase(), a = V.sheet ? sheetAcc() : acc(), held = new Set(compute(a).holds.map(h => h.code)), mine = new Set(Object.keys(S.stocks));
   const out = [];
   for (const [c, n] of Object.entries(TW_NAMES)) {
     let r;
@@ -1710,6 +1711,29 @@ function showSugg(q) {
   box.innerHTML = list.map((x, i) => `<button type="button" role="option" data-pick="${esc(x.code)}" class="${i === 0 ? 'on' : ''}"><b>${hl(x.code, q.trim())}</b><span>${hl(x.name, q.trim())}</span>${isJP(x.code) ? '<span class="tag jp-tag">日股</span>' : ''}${x.held ? '<span class="tag">持有中</span>' : ''}</button>`).join('');
   box.hidden = false;
 }
+// 目標張數：代號欄的關鍵字建議（代號或名稱）
+function tgtSugg(q) {
+  const box = $('#tgt-sugg'); if (!box) return;
+  q = String(q || '').trim();
+  const list = q ? suggestCodes(q) : [];
+  if (!list.length) { box.hidden = true; box.innerHTML = ''; return; }
+  box.innerHTML = list.map((x, i) => `<button type="button" role="option" data-tpick="${esc(x.code)}" class="${i === 0 ? 'on' : ''}"><b>${hl(x.code, q)}</b><span>${hl(x.name, q)}</span>${isJP(x.code) ? '<span class="tag jp-tag">日股</span>' : ''}${x.held ? '<span class="tag">持有中</span>' : ''}</button>`).join('');
+  box.hidden = false;
+}
+document.addEventListener('input', e => { if (e.target.id === 'tgt-code') tgtSugg(e.target.value); });
+document.addEventListener('pointerdown', e => {
+  const b = e.target.closest('[data-tpick]');
+  if (b) { e.preventDefault(); const el = $('#tgt-code'); el.value = b.dataset.tpick; tgtSugg(''); const l = $('#tgt-lots'); if (l) l.focus(); }
+  else if (!e.target.closest('#tgt-code')) tgtSugg('');
+});
+document.addEventListener('keydown', e => {
+  if (e.target.id !== 'tgt-code') return;
+  const box = $('#tgt-sugg'); if (!box || box.hidden) return;
+  const btns = [...box.querySelectorAll('[data-tpick]')]; let i = btns.findIndex(b => b.classList.contains('on'));
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); i = (i + (e.key === 'ArrowDown' ? 1 : btns.length - 1)) % btns.length; btns.forEach((b, j) => b.classList.toggle('on', j === i)); }
+  else if (e.key === 'Enter') { e.preventDefault(); e.target.value = btns[Math.max(0, i)].dataset.tpick; tgtSugg(''); const l = $('#tgt-lots'); if (l) l.focus(); }
+  else if (e.key === 'Escape') tgtSugg('');
+});
 function hideSugg() { const box = $('#x-sugg'); if (box) { box.hidden = true; box.innerHTML = ''; } }
 function pickCode(code) {
   const sh = V.sheet, el = $('#x-code'); if (!sh || !el) return;
