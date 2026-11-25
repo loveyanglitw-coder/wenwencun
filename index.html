@@ -800,7 +800,7 @@ const segBar = (items, cur, act, cols) => `<div class="seg" style="grid-template
 
 /* ---------- 總覽 ---------- */
 // ---- 目標張數：每個帳戶各自設定想存的標的與張數（日股以 100 股為一單位） ----
-const TGT_ON = window.APP_EDITION === 'personal'; // 目前只在個人版顯示
+const TGT_ON = true; // 個人版、公開版都顯示
 const tgtUnit = c => isJP(c) ? 100 : 1000, tgtWord = c => isJP(c) ? '單位' : '張';
 const lotTxt = n => grp(n, Math.abs(n % 1) > 1e-9 ? (Math.abs((n * 10) % 1) > 1e-9 ? 3 : 1) : 0);
 function targetCard(a, m) {
