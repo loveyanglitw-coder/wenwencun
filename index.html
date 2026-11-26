@@ -1782,17 +1782,19 @@ $('#importFile').addEventListener('change', e => {
       const d = JSON.parse(rd.result);
       if (!Array.isArray(d.accounts) || !d.stocks) throw 0;
       if (d.merge === 'append') { // 追加匯入：只把檔案內的帳戶交易加進同名帳戶，其他資料不動
-        const m = JSON.parse(JSON.stringify(S)); let added = 0, updated = 0;
+        const m = JSON.parse(JSON.stringify(S)); let added = 0, updated = 0, removed = 0;
         d.accounts.forEach(fa => {
           let ta = m.accounts.find(x => x.name === fa.name);
-          if (!ta) { ta = Object.assign({}, fa, { txns: [] }); m.accounts.push(ta); }
+          if (!ta && fa.removeCodes && !(fa.txns || []).length) return; // 只刪除、但沒有這個帳戶：略過
+          if (!ta) { ta = Object.assign({}, fa, { txns: [] }); delete ta.removeCodes; m.accounts.push(ta); }
+          if (Array.isArray(fa.removeCodes) && fa.removeCodes.length) { const rc = new Set(fa.removeCodes), n0 = (ta.txns || []).length; ta.txns = (ta.txns || []).filter(t => !rc.has(t.code)); removed += n0 - ta.txns.length; }
           else if (fa.applySettings) ['disc', 'min'].forEach(k => { if (fa[k] != null) ta[k] = fa[k]; });
           const ids = new Set((ta.txns || []).map(t => t.id)); ta.txns = ta.txns || [];
           (fa.txns || []).forEach(t => { if (!ids.has(t.id)) { ta.txns.push(t); added++; } else { const i = ta.txns.findIndex(x => x.id === t.id); if (JSON.stringify(ta.txns[i]) !== JSON.stringify(t)) { ta.txns[i] = t; updated++; } } });
         });
         Object.keys(d.stocks).forEach(c => { if (!m.stocks[c]) m.stocks[c] = d.stocks[c]; });
         S = normalize(m); mode = store ? 'saved' : 'local'; persist(); render();
-        toast(`${d.accounts.map(a => a.name).join('、')}：新增 ${added} 筆${updated ? `、更新 ${updated} 筆` : ''}`);
+        toast(`${d.accounts.map(a => a.name).join('、')}：${removed ? `刪除 ${removed} 筆` + (added || updated ? '、' : '') : ''}${added || !removed ? `新增 ${added} 筆` : ''}${updated ? `、更新 ${updated} 筆` : ''}`);
         e.target.value = ''; return;
       }
       S = normalize(d); mode = store ? 'saved' : 'local'; persist(); render();
