@@ -182,6 +182,7 @@ nav.tabs .plus{justify-self:center;width:52px;height:52px;border-radius:18px;bac
 .hseg{display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(255,255,255,.08);align-self:flex-start}.hseg button{border:0;background:none;color:rgba(255,255,255,.62);font:inherit;font-size:14px;font-weight:600;padding:7px 16px;border-radius:999px;cursor:pointer;min-height:36px}.hseg button.on{background:rgba(255,255,255,.18);color:#fff}
 .tgt-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:12px;margin:0 -2px;padding:0 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.tgt-track::-webkit-scrollbar{display:none}.tgt-slide{flex:0 0 100%;min-width:0;scroll-snap-align:start;display:flex;flex-direction:column;gap:8px}.tgt-dots{display:flex;justify-content:center;gap:6px;margin-top:-2px}.tgt-dots span{width:6px;height:6px;border-radius:50%;background:var(--line)}.tgt-dots span.on{background:var(--accent);width:16px;border-radius:3px}
 .loan-row{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:rgba(255,255,255,.07);border:0;border-radius:14px;padding:10px 12px;color:inherit;font:inherit;cursor:pointer}.loan-row .lr1{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.loan-row .s{font-size:12px;opacity:.7}.loan-row .ltag{font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(243,200,106,.18);color:#f3c86a;font-weight:600;margin-left:6px}.loan-row .lbar{height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;margin:6px 0 2px}.loan-row .lbar i{display:block;height:100%;background:#f3c86a}.loan-chips{display:flex;flex-wrap:wrap;gap:6px}
+.loan-list{display:flex;flex-direction:column;gap:10px}.loan-card{display:flex;flex-direction:column;gap:8px;text-align:left;width:100%;background:var(--card);border-radius:18px}.loan-card .lc1{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.loan-card .lc3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.loan-card .lc3>span{display:flex;flex-direction:column}
 </style>
 </head>
 <body>
@@ -1023,6 +1024,22 @@ function pageLedger(a, m) {
         <span class="kv" style="align-items:flex-end;text-align:right"><span class="k">報酬率</span><span class="num ${cls(v)}" style="font-weight:700;font-size:16px">${arrow(v)}${pct(r.cost ? v / r.cost : 0)}</span><span class="s num">${dm && r.div ? '費稅 ' + money(r.fee + r.tax) : '&nbsp;'}</span></span>
       </span>
     </button>`; }).join('')}</div>` : `<div class="list"><div class="empty">還沒有賣出紀錄</div></div>`);
+  } else if (V.ledger === 'loan' && LOAN_ON) {
+    const LS = loanStats(a), bal = LS.reduce((s, x) => s + x.bal, 0), paid = LS.reduce((s, x) => s + x.interest, 0), mi = LS.reduce((s, x) => s + x.monthInt, 0);
+    sum = L('借款餘額', money(bal), 'gold') + L('本月預估利息', money(mi), '', 'center') + L('累計已付利息', money(-paid), '', 'right');
+    const lnName = id => (LS.find(x => x.id === id) || {}).name || '借款';
+    const recs = sortTx(a.txns.filter(t => t.loan && ['lborrow', 'lrepay', 'loan'].includes(t.type))).reverse();
+    const tg = { lborrow: '借入', lrepay: '還款', loan: '利息' };
+    body = (LS.length ? `<div class="loan-list">${LS.map(x => { const p = x.borrowed ? Math.min(1, x.repaid / x.borrowed) : 0; return `<button class="card pad rowbtn loan-card" data-a="loanRepay" data-v="${esc(x.id)}">
+        <span class="lc1"><b>${esc(x.name)}</b><span class="tag" style="background:var(--gold-soft);color:var(--gold)">${LOAN_KIND[x.kind] || '借款'}・${grp(x.rate || 0, 2)}%${x.kind === 'credit' && x.years ? '・' + x.years + ' 年' : ''}</span></span>
+        <span class="lc3"><span><span class="k">已借</span><b class="num">${money(x.borrowed)}</b></span><span><span class="k">已還本金</span><b class="num">${money(x.repaid)}</b></span><span style="text-align:right"><span class="k">餘額</span><b class="num gold">${money(x.bal)}</b></span></span>
+        <span class="bar"><span style="width:${(p * 100).toFixed(1)}%;background:var(--gold)"></span></span>
+        <span class="lc1 small"><span>${x.start ? roc(x.start) + ' 起・' : ''}已付利息 ${money(x.interest)}</span><span>${x.kind === 'credit' && x.pmt ? '月繳 ' + money(x.pmt) : '月息約 ' + money(x.monthInt)}</span></span>
+        <span class="small" style="color:var(--accent);font-weight:600">${x.bal > 0 ? '點一下記還款 ›' : '已還清'}</span>
+      </button>`; }).join('')}</div>` : `<div class="list"><div class="empty">還沒有借款紀錄</div></div>`) +
+      `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" data-a="addLoan">＋ 新增借款</button>${LS.length ? `<button class="btn small ghost" data-a="loanInt">記利息</button>` : ''}</div>` +
+      `<div class="h2row"><h2 style="font-size:15px">每筆紀錄</h2><span class="small">點一筆可修改</span></div>` +
+      (recs.length ? `<div class="list">${recs.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><span class="tag" style="background:var(--gold-soft);color:var(--gold);white-space:nowrap">${tg[t.type]}</span><div class="main"><span class="t">${esc(lnName(t.loan))}</span><span class="st num">${roc(t.date)}${t.memo && t.memo !== lnName(t.loan) + ' 利息' ? '・' + esc(t.memo) : ''}</span></div><span class="num" style="font-weight:600">${t.type === 'lborrow' ? '+' : '−'}${money(t.amount)}</span>${delBtn(t.id)}</div>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有借入、還款或利息紀錄</div></div>`);
   } else {
     sum = L('原始股利', money(m.origSum)) + L(m.wtaxSum ? '匯費・日本稅' : '匯費', money(-m.otherSum), '', 'center') + L('利息', money(-m.loanSum), '', 'center') + L('最後股利', money(m.netDiv), 'gold', 'right');
     const pend = pendingDivs(a);
@@ -1033,7 +1050,7 @@ function pageLedger(a, m) {
       '';
   }
   return `<div class="top">${topAcc(a)}${curChip()}</div>${fxNote()}
-    ${segBar([['cash', '帳戶交易'], ['hold', '庫存損益'], ['real', '實現損益'], ['div', '股票股利']], V.ledger, 'ledger')}
+    ${segBar([['cash', '帳戶交易'], ['hold', '庫存損益'], ['real', '實現損益'], ['div', '股票股利']].concat(LOAN_ON ? [['loan', '借款']] : []), V.ledger, 'ledger')}
     <div class="card pad ${V.ledger === 'div' ? 'grid4' : 'grid3'}">${sum}</div>${body}`;
 }
 function delBtn(id) {
@@ -1324,7 +1341,7 @@ const groupOf = t => Object.keys(GROUPS).find(g => GROUPS[g][1].includes(t)) || 
 function contextType() {
   if (V.page === 'stock') return 'buy';
   if (V.page) return 'buy';
-  if (V.tab === 'ledger') return ({ cash: 'in', hold: 'buy', real: 'sell', div: 'div' })[V.ledger];
+  if (V.tab === 'ledger') return ({ cash: 'in', hold: 'buy', real: 'sell', div: 'div', loan: (acc().loans || []).length ? 'lrepay' : 'lborrow' })[V.ledger] || 'buy';
   if (V.tab === 'hist' || V.tab === 'cal') return 'div';
   return 'buy';
 }
@@ -1585,7 +1602,8 @@ document.addEventListener('click', e => {
   if (a !== 'del' && a !== 'logout') V.armed = null;
   switch (a) {
     case 'addLoan': openSheet('lborrow'); V.sheet.loanId = '__new'; render(); return;
-    case 'loanAct': { const L = (acc().loans || []).find(x => x.id === v); openSheet(L && L.kind === 'credit' ? 'lrepay' : 'lint'); V.sheet.loanId = v; render(); return; }
+    case 'loanAct': case 'loanRepay': openSheet('lrepay'); V.sheet.loanId = v; render(); return;
+    case 'loanInt': openSheet('lint'); render(); return;
     case 'heroView': V.heroView = v; try { localStorage.setItem('wwc-hero', v); } catch (x) {} break;
     case 'tgtEdit': V.tgtEdit = !V.tgtEdit; break;
     case 'tgtDel': { const a0 = acc(); a0.targets = (a0.targets || []).filter((_, i) => i !== +v); persist(); break; }
