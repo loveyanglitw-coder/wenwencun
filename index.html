@@ -1575,8 +1575,14 @@ function saveSheet() {
       const name = String(f.lname ?? (L ? L.name : '')).trim(), rate = num(f.lrate ?? (L ? L.rate : 0)), kind = sh.lkind || (L ? L.kind : 'pledge'), years = num(f.lyears ?? (L ? L.years : 0));
       if (!name) return toast('請填借款名稱');
       if (!(amount > 0)) return toast('請填金額');
-      if (!L) { L = { id: uid(), name, kind, rate, years: kind === 'credit' ? years : undefined, start: sh.date || todayISO() }; a0.loans.push(L); }
-      else Object.assign(L, { name, kind, rate, years: kind === 'credit' ? years : undefined });
+      const yrs = kind === 'credit' ? years : undefined, sameAs = x => x.name === name && x.kind === kind && (+x.rate || 0) === rate && (kind !== 'credit' || (+x.years || 0) === years);
+      if (L && !sameAs(L) && a0.txns.some(x => x.loan === L.id && x.type === 'lborrow' && x.id !== sh.editId)) {
+        // 這個借款方還有其他筆：只改這一筆，把它拆出來（或併到名稱、利率都相同的那個借款），其他筆不受影響
+        const old = L; L = a0.loans.find(x => x.id !== old.id && sameAs(x)) || null;
+        if (!L) { L = { id: uid(), name, kind, rate, years: yrs, start: sh.date || todayISO() }; a0.loans.push(L); }
+        if (sh.editId) a0.txns.forEach(x => { if (x.type === 'lrepay' && x.tr === sh.editId) x.loan = L.id; });
+      } else if (!L) { L = { id: uid(), name, kind, rate, years: yrs, start: sh.date || todayISO() }; a0.loans.push(L); }
+      else Object.assign(L, { name, kind, rate, years: yrs });
     }
     if (!L) return toast('請先選擇借款');
     if (!(amount > 0)) return toast('請填金額');
