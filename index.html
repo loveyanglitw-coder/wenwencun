@@ -1791,11 +1791,11 @@ $('#importFile').addEventListener('change', e => {
           (fa.txns || []).forEach(t => { if (!ids.has(t.id)) { ta.txns.push(t); added++; } else { const i = ta.txns.findIndex(x => x.id === t.id); if (JSON.stringify(ta.txns[i]) !== JSON.stringify(t)) { ta.txns[i] = t; updated++; } } });
         });
         Object.keys(d.stocks).forEach(c => { if (!m.stocks[c]) m.stocks[c] = d.stocks[c]; });
-        S = normalize(m); mode = store && store.kind === 'db' ? 'saved' : 'local'; persist(); render();
+        S = normalize(m); mode = store ? 'saved' : 'local'; persist(); render();
         toast(`${d.accounts.map(a => a.name).join('、')}：新增 ${added} 筆${updated ? `、更新 ${updated} 筆` : ''}`);
         e.target.value = ''; return;
       }
-      S = normalize(d); mode = store && store.kind === 'db' ? 'saved' : 'local'; persist(); render();
+      S = normalize(d); mode = store ? 'saved' : 'local'; persist(); render();
       toast(`已匯入 ${S.accounts.length} 個帳戶`);
     } catch (x) { toast('檔案格式不對，請選本 App 匯出的備份檔'); }
     e.target.value = '';
