@@ -881,7 +881,7 @@ function heroLoan(a, m) {
     <button class="btn primary" data-a="addLoan" style="align-self:flex-start">新增借款</button>`;
   const bal = L.reduce((s, x) => s + x.bal, 0), mInt = L.reduce((s, x) => s + x.monthInt, 0), paidInt = L.reduce((s, x) => s + x.interest, 0), accInt = L.reduce((s, x) => s + x.accrued, 0);
   const lev = m.equity > 0 ? m.mv / m.equity : 0, divCover = paidInt ? m.cashSum / paidInt : 0;
-  return `<div><div class="lbl">借款餘額（${act.length} 筆）</div><div class="big goldc">${money(bal)}</div><div class="lbl" style="font-size:12px">${m.equity > 0 ? `槓桿 ${grp(lev, 2)} 倍・股票市值 ${money(m.mv)} ÷ 帳戶淨值 ${money(m.equity)}` : '帳戶淨值為負，請確認借款與存入紀錄'}</div></div>
+  return `<div><div class="lbl">借款餘額（${act.length} 筆）</div><div class="big goldc">${money(bal)}</div><div class="lbl" style="font-size:12px">${m.equity > 0 ? `槓桿 ${grp(lev, 2)} 倍・股票市值 ${money(m.mv)} ÷ 扣除借款後淨值 ${money(m.equity)}` : '扣除借款後淨值為負，請確認借款與存入紀錄'}</div></div>
     <div style="display:flex;flex-direction:column;gap:8px">
       <div class="hrow"><span>本月預估利息</span><span class="num">${money(mInt)}</span></div>
       <div class="hrow"><span>累積利息<span style="font-size:11px;opacity:.7">（未還清的借款）</span></span><span class="num ${accInt ? 'downc' : ''}">${money(-accInt)}</span></div>
