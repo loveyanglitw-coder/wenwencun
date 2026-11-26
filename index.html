@@ -632,23 +632,31 @@ function divCalc(a, code, e) {
   return { sh, gross, nhi, remit, net: Math.max(0, gross - nhi - remit), stockSh };
 }
 function autoPost() {
-  if (mode === 'demo' || S.settings.divMode !== 'auto') return;
+  if (mode === 'demo') return;
+  // 清掉自動入帳造成的重複：同一次配息已經有手動紀錄（日期為除息日或發放日）時，移除自動那筆
+  let fixed = 0;
+  for (const a of S.accounts) {
+    const dup = a.txns.filter(t => t.auto && t.ev && (t.type === 'cash' || t.type === 'stock') && (() => { const e = ((S.stocks[t.code] || {}).events || []).find(x => x.id === t.ev) || { id: '\u0000', ex: t.date }; return a.txns.some(o => o !== t && !o.auto && o.type === t.type && o.code === t.code && (o.date === e.ex || (e.pay && o.date === e.pay) || (o.memo && o.memo.includes('除息日 ' + e.ex)))); })());
+    if (dup.length) { a.txns = a.txns.filter(t => !dup.includes(t)); fixed += dup.length; }
+  }
+  if (fixed) { persist(); setTimeout(() => toast(`已移除 ${fixed} 筆重複的自動入帳股利`), 300); }
+  if (S.settings.divMode !== 'auto') return;
   const today = todayISO(); let n = 0;
   for (const a of S.accounts) for (const code in S.stocks) for (const e of S.stocks[code].events) {
     if (!e.pay || e.pay > today) continue;
     const c = divCalc(a, code, e);
     if (c.sh <= 0) continue;
-    if (e.cash && !a.txns.some(t => t.type === 'cash' && t.code === code && t.ev === e.id) && !a.txns.some(t => t.type === 'cash' && t.code === code && t.date === e.pay)) {
+    if (e.cash && !isRecorded(a, code, e, 'cash')) {
       a.txns.push({ id: uid(), date: e.ex, type: 'cash', code, shares: c.sh, perShare: e.cash, gross: c.gross, other: c.nhi + c.remit, amount: c.net, interest: 0, ev: e.id, auto: true }); n++;
     }
-    if (e.stock && c.stockSh > 0 && !a.txns.some(t => t.type === 'stock' && t.code === code && t.ev === e.id)) {
+    if (e.stock && c.stockSh > 0 && !isRecorded(a, code, e, 'stock')) {
       a.txns.push({ id: uid(), date: e.ex, type: 'stock', code, shares: c.stockSh, perShare: e.stock, ev: e.id, auto: true }); n++;
     }
   }
   if (n) { persist(); setTimeout(() => toast(`已自動記入 ${n} 筆股利`), 300); }
 }
-function isRecorded(a, code, e, type) {
-  return a.txns.some(t => t.type === type && t.code === code && (t.ev === e.id || t.date === e.ex || (e.pay && t.date === e.pay)));
+function isRecorded(a, code, e, type, skip) {
+  return a.txns.some(t => t !== skip && t.type === type && t.code === code && (t.ev === e.id || t.date === e.ex || (e.pay && t.date === e.pay) || (t.memo && t.memo.includes('除息日 ' + e.ex))));
 }
 function pendingDivs(a) { // 待確認：已公告、已過除權息日、當時有持股、還沒入帳
   const today = todayISO(), out = [];
