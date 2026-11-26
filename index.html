@@ -348,15 +348,16 @@ const LOAN_ON = window.APP_EDITION === 'personal';
 const LOAN_KIND = { pledge: '股票質押', credit: '信用貸款', other: '其他借款' };
 // 每次借入＝一筆（tranche）；還款帶 tr 指定還哪一筆，沒指定的依先借先還分配；利息按日計息：餘額 × 年利率 × 天數 ÷ 365
 const loanDays = (d1, d2) => Math.max(0, Math.round((new Date(d2 + 'T00:00:00') - new Date(d1 + 'T00:00:00')) / 86400000));
-function loanTranches(a) {
+function loanTranches(a, skip) {
   const today = todayISO(), out = [];
   for (const L of a.loans || []) {
     const tr = sortTx(a.txns.filter(t => t.loan === L.id && t.type === 'lborrow')).map((t, k) => ({ id: t.id, loanId: L.id, name: L.name, kind: L.kind, rate: L.rate || 0, years: L.years, date: t.date, principal: t.amount, no: k + 1, pays: [] }));
-    for (const r of sortTx(a.txns.filter(t => t.loan === L.id && t.type === 'lrepay'))) {
+    for (const r of sortTx(a.txns.filter(t => t.loan === L.id && t.type === 'lrepay' && t.id !== skip))) {
       let left = r.amount;
       const target = r.tr && tr.find(x => x.id === r.tr);
-      const order = target ? [target].concat(tr.filter(x => x !== target)) : tr;
-      for (const x of order) { if (left <= 0) break; const owe = x.principal - x.pays.reduce((s, p) => s + p.amt, 0); if (owe <= 0 || x.date > r.date) continue; const amt = Math.min(owe, left); x.pays.push({ date: r.date, amt }); left -= amt; }
+      // 指定了哪一筆：只還那一筆，多的不會流到其他筆；沒指定的舊紀錄才依先借先還分配
+      if (target) { const owe = target.principal - target.pays.reduce((s, p) => s + p.amt, 0); const amt = Math.min(Math.max(0, owe), left); if (amt > 0) target.pays.push({ date: r.date < target.date ? target.date : r.date, amt }); continue; }
+      for (const x of tr) { if (left <= 0) break; const owe = x.principal - x.pays.reduce((s, p) => s + p.amt, 0); if (owe <= 0 || x.date > r.date) continue; const amt = Math.min(owe, left); x.pays.push({ date: r.date, amt }); left -= amt; }
     }
     for (const x of tr) {
       let bal = x.principal, from = x.date, acc = 0, end = today;
@@ -1579,6 +1580,11 @@ function saveSheet() {
     }
     if (!L) return toast('請先選擇借款');
     if (!(amount > 0)) return toast('請填金額');
+    if (t === 'lrepay' && sh.trId) {
+      const x = loanTranches(a0, sh.editId).find(y => y.id === sh.trId);
+      if (x && amount > x.bal) return toast(`這一筆只剩 ${money(x.bal, { show: true })} 沒還`);
+      if (x && (sh.date || todayISO()) < x.date) return toast(`還款日不能早於這筆的借入日 ${roc(x.date)}`);
+    }
     txs.push(Object.assign({ id: uid(), type: t === 'lint' ? 'loan' : t, loan: L.id, amount }, base, t === 'lrepay' && sh.trId ? { tr: sh.trId } : {}, t === 'lint' && !base.memo ? { memo: L.name + ' 利息' } : {}));
   } else if (t.startsWith('fx')) {
     const cur = sh.cur || 'USD', qty = num(f.fqty);
