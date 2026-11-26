@@ -16,4 +16,4 @@ for c in codes:
     out[c] = {'div': [{k: x.get(k) for k in ('year','CashEarningsDistribution','CashStatutorySurplus','StockEarningsDistribution','StockStatutorySurplus','CashExDividendTradingDate','StockExDividendTradingDate','CashDividendPaymentDate','date','CashIncreaseSubscriptionRate','CashIncreaseSubscriptionpRrice')} for x in rows], 'cr': cr}
     print(c, d.get('msg'), len(rows), len(cr))
     time.sleep(1.5)
-print('JSON>>>' + json.dumps(out, ensure_ascii=False) + '<<<JSON')
+for c,v in out.items(): print('J>>' + json.dumps({c: v}, ensure_ascii=False))
