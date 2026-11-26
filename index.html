@@ -365,7 +365,7 @@ function loanTranches(a, skip) {
       if (bal > 0) acc += bal * x.rate / 100 * loanDays(from, today) / 365;
       const r = x.rate / 100 / 12;
       let pmt = 0; if (x.kind === 'credit' && x.years > 0) { const n = x.years * 12; pmt = Math.round(r ? x.principal * r / (1 - Math.pow(1 + r, -n)) : x.principal / n); }
-      out.push(Object.assign(x, { byDiv: x.pays.reduce((s, p) => s + (p.src === 'div' ? p.amt : 0), 0), byDca: x.pays.reduce((s, p) => s + (p.src === 'dca' ? p.amt : 0), 0), repaid: x.principal - Math.max(0, bal), bal: Math.max(0, bal), monthInt: Math.round(Math.max(0, bal) * r), accrued: Math.round(acc), days: loanDays(x.date, bal > 0 ? today : end), paidOff: bal <= 0, pmt }));
+      out.push(Object.assign(x, { byDiv: x.pays.reduce((s, p) => s + (p.src === 'div' ? p.amt : 0), 0), byDca: x.pays.reduce((s, p) => s + (p.src === 'dca' ? p.amt : 0), 0), byOther: x.pays.reduce((s, p) => s + (p.src === 'other' ? p.amt : 0), 0), repaid: x.principal - Math.max(0, bal), bal: Math.max(0, bal), monthInt: Math.round(Math.max(0, bal) * r), accrued: Math.round(acc), days: loanDays(x.date, bal > 0 ? today : end), paidOff: bal <= 0, pmt }));
     }
   }
   return out;
@@ -1052,14 +1052,14 @@ function pageLedger(a, m) {
     sum = L('借款餘額', money(bal), 'gold') + L('本月預估利息', money(mi), '', 'center') + L('累積利息', money(-accInt), '', 'right');
     const lnName = id => (LS.find(x => x.id === id) || {}).name || '借款';
     const recs = sortTx(a.txns.filter(t => t.loan && ['lborrow', 'lrepay', 'loan'].includes(t.type))).reverse();
-    const tg = { lborrow: '借入', lrepay: '還款', loan: '利息' }, SRC = { div: '股利', dca: '定期定額' };
+    const tg = { lborrow: '借入', lrepay: '還款', loan: '利息' }, SRC = { div: '股利', dca: '定期定額', other: '其他' };
     const multi = id => T.filter(x => x.loanId === id).length > 1;
     body = (T.length ? `<div class="ln-track" data-n="${T.length}">${T.map(x => { const p = x.principal ? Math.min(1, x.repaid / x.principal) : 0; return `<button class="card pad rowbtn loan-card ln-slide ${x.paidOff ? 'off' : ''}" data-a="loanRepay" data-v="${esc(x.loanId)}" data-tr="${esc(x.id)}">
         <span class="lc1"><b>${esc(x.name)}${multi(x.loanId) ? `<span class="small" style="font-weight:500">　第 ${x.no} 筆</span>` : ''}</b><span class="tag" style="background:var(--gold-soft);color:var(--gold)">${LOAN_KIND[x.kind] || '借款'}・${grp(x.rate, 2)}%${x.kind === 'credit' && x.years ? '・' + x.years + ' 年' : ''}</span></span>
         <span class="lc3"><span><span class="k">借款金額</span><b class="num">${money(x.principal)}</b></span><span><span class="k">已還本金</span><b class="num">${money(x.repaid)}</b></span><span style="text-align:right"><span class="k">餘額</span><b class="num gold">${money(x.bal)}</b></span></span>
         <span class="bar"><span style="width:${(p * 100).toFixed(1)}%;background:var(--gold)"></span></span>
         <span class="lc1 small"><span class="num">每月利息 ${money(x.monthInt)}${x.kind === 'credit' && x.pmt && !x.paidOff ? `（月繳 ${money(x.pmt)}）` : ''}</span><span class="num">累積利息 ${money(x.accrued)}</span></span>
-        ${x.byDiv || x.byDca ? `<span class="lc1 small"><span class="num">股利還 ${money(x.byDiv)}</span><span class="num">定期定額還 ${money(x.byDca)}</span></span>` : ''}
+        ${x.byDiv || x.byDca || x.byOther ? `<span class="lc1 small"><span class="num">股利還 ${money(x.byDiv)}</span><span class="num">定期定額還 ${money(x.byDca)}</span>${x.byOther ? `<span class="num">其他還 ${money(x.byOther)}</span>` : ''}</span>` : ''}
         <span class="lc1 small"><span class="num">${roc(x.date)} 借入・${x.paidOff ? '已還清（' + x.days + ' 天）' : '已借 ' + x.days + ' 天'}</span><span style="color:var(--accent);font-weight:600">${x.paidOff ? '' : '點一下記還款 ›'}</span></span>
       </button>`; }).join('')}</div>${T.length > 1 ? `<div class="tgt-dots ln-dots" aria-hidden="true">${T.map((_, k) => `<span class="${k === (V.lnIdx || 0) % T.length ? 'on' : ''}"></span>`).join('')}</div>` : ''}` : `<div class="list"><div class="empty">還沒有借款紀錄</div></div>`) +
       `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" data-a="addLoan">＋ 新增借款</button>${LS.length ? `<button class="btn small ghost" data-a="loanInt">記利息</button>` : ''}</div>` +
@@ -1498,7 +1498,7 @@ function renderSheetInner(only) {
       ${segBar(Object.entries(LOAN_KIND), kind, 'lkind')}
       ${kind === 'credit' ? field('x-lyears', '貸款年數（算每月還款）', inp('x-lyears', 'lyears', f.lyears ?? (cur ? cur.years || '' : ''), 'class="num" type="text" inputmode="numeric" placeholder="7"')) : ''}` : ''}
       ${t === 'lrepay' && trs.length > 1 ? `<div class="loan-chips">${trs.map(x => `<button type="button" class="btn small ${x.id === sh.trId ? 'primary' : 'ghost'}" data-a="trPick" data-v="${esc(x.id)}">${roc(x.date)}・餘 ${money(x.bal, { show: true })}</button>`).join('')}</div>` : ''}
-      ${t === 'lrepay' ? `<p class="small" style="margin:0">這次用什麼還？</p>${segBar([['dca', '定期定額'], ['div', '股利']], sh.lsrc || 'dca', 'lsrc')}` : ''}
+      ${t === 'lrepay' ? `<p class="small" style="margin:0">這次用什麼還？</p>${segBar([['dca', '定期定額'], ['div', '股利'], ['other', '其他']], sh.lsrc || 'dca', 'lsrc')}` : ''}
       <div class="grid2">${field('x-lamt', t === 'lborrow' ? '借入金額' : t === 'lrepay' ? '還本金金額' : '利息金額', inp('x-lamt', 'lamt', f.lamt ?? (suggest || ''), 'class="bignum" type="text" inputmode="numeric" placeholder="0"'), 'focus')}${dateF()}</div>
       ${cur ? `<p class="small" style="margin:0">${esc(cur.name)}：餘額 ${money(cur.bal, { show: true })}・本月利息約 ${money(cur.monthInt, { show: true })}${cur.kind === 'credit' && cur.pmt ? `・每月還款約 ${money(cur.pmt, { show: true })}（本金 ${money(Math.max(0, cur.pmt - cur.monthInt), { show: true })}＋利息 ${money(cur.monthInt, { show: true })}）` : ''}</p>` : ''}
       <div class="card pad" data-live="lnet" style="background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="k">${t === 'lborrow' ? '撥入帳戶餘額' : t === 'lrepay' ? '從帳戶餘額扣除・借款餘額減少' : '從帳戶餘額扣除・計入利息成本'}</span><b class="num ${t === 'lborrow' ? 'goldc' : ''}" style="font-size:20px">${t === 'lborrow' ? '+' : '−'}$${grp(amt)}</b></div>
