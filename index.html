@@ -462,7 +462,7 @@ function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯�
   const real = realList.reduce((s, r) => s + r.pl, 0), realDiv = realList.reduce((s, r) => s + r.div, 0), realCost = realList.reduce((s, r) => s + r.cost, 0);
   const todayPL = holds.reduce((s, h) => s + h.today, 0);
   const invest = inSum - outSum;
-  const balance = inSum - outSum - buySum + sellNet + cashSum - loanSum + borrowSum - repaySum, loanBal = borrowSum - repaySum;
+  const balance = inSum - outSum - buySum + sellNet + cashSum - loanSum - borrowSum + repaySum, loanBal = borrowSum - repaySum;
   const sellCost = holds.reduce((s, h) => s + (isJP(h.code) || isFX(h.code) ? 0 : feeFor(a, h.mv) + Math.floor(h.mv * taxRate(h.code))), 0);
   const stockPL = unreal + real, netDiv = cashSum - loanSum, total = stockPL + netDiv;
   const days = firstIn ? daysBetween(firstIn, today) : 0;
@@ -485,7 +485,7 @@ function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯�
   const monthsElapsed = +today.slice(5, 7);
   return { holds, mv, cost, unreal, divHeld, unrealRet: cost ? unreal / cost : 0, real, realDiv, realCost, realRet: realCost ? real / realCost : 0, realList, divs: Object.values(divs),
     fxPL: holds.reduce((s, h) => s + (isFX(h.code) ? h.pl : 0), 0), cashSum, origSum, otherSum, wtaxSum: TX.reduce((s, t) => s + (t.type === 'cash' ? t.wtax || 0 : 0), 0), loanSum, netDiv, divCount: a.txns.filter(divPaid).length, inSum, outSum, invest, balance,
-    value: balance + mv, netValue: balance + mv - sellCost, stockPL, total, loanBal, equity: balance + mv - loanBal,
+    value: balance + mv, netValue: balance + mv - sellCost, stockPL, total, loanBal, equity: balance + mv,
     stockRet: invest ? stockPL / invest : 0, totalRet: invest ? total / invest : 0, days,
     totalAnn: invest ? annualize(total / invest, days) : 0, stockAnn: invest ? annualize(stockPL / invest, days) : 0,
     thisM, nextM, todayPL, todayRet: (mv - todayPL) ? todayPL / (mv - todayPL) : 0,
@@ -1499,7 +1499,7 @@ function renderSheetInner(only) {
       ${t === 'lrepay' && trs.length > 1 ? `<div class="loan-chips">${trs.map(x => `<button type="button" class="btn small ${x.id === sh.trId ? 'primary' : 'ghost'}" data-a="trPick" data-v="${esc(x.id)}">${roc(x.date)}・餘 ${money(x.bal, { show: true })}</button>`).join('')}</div>` : ''}
       <div class="grid2">${field('x-lamt', t === 'lborrow' ? '借入金額' : t === 'lrepay' ? '還本金金額' : '利息金額', inp('x-lamt', 'lamt', f.lamt ?? (suggest || ''), 'class="bignum" type="text" inputmode="numeric" placeholder="0"'), 'focus')}${dateF()}</div>
       ${cur ? `<p class="small" style="margin:0">${esc(cur.name)}：餘額 ${money(cur.bal, { show: true })}・本月利息約 ${money(cur.monthInt, { show: true })}${cur.kind === 'credit' && cur.pmt ? `・每月還款約 ${money(cur.pmt, { show: true })}（本金 ${money(Math.max(0, cur.pmt - cur.monthInt), { show: true })}＋利息 ${money(cur.monthInt, { show: true })}）` : ''}</p>` : ''}
-      <div class="card pad" data-live="lnet" style="background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="k">${t === 'lborrow' ? '撥入帳戶餘額' : t === 'lrepay' ? '從帳戶餘額扣除・借款餘額減少' : '從帳戶餘額扣除・計入利息成本'}</span><b class="num ${t === 'lborrow' ? 'goldc' : ''}" style="font-size:20px">${t === 'lborrow' ? '+' : '−'}$${grp(amt)}</b></div>
+      <div class="card pad" data-live="lnet" style="background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="k">${t === 'lborrow' ? '帳戶餘額減少・借款餘額增加' : t === 'lrepay' ? '帳戶餘額增加・借款餘額減少' : '從帳戶餘額扣除・計入利息成本'}</span><b class="num ${t === 'lborrow' ? 'goldc' : ''}" style="font-size:20px">${t === 'lrepay' ? '+' : '−'}$${grp(amt)}</b></div>
       ${memoF()}`;
   } else if (t.startsWith('fx')) {
     const cur = sh.cur || 'USD', q = num(f.fqty), r = f.fxrate != null && f.fxrate !== '' ? num(f.fxrate) : fxRate(cur), fee = num(f.fee);
