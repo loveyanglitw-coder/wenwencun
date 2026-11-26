@@ -181,6 +181,7 @@ nav.tabs .plus{justify-self:center;width:52px;height:52px;border-radius:18px;bac
 #tgt-sugg{right:auto;width:min(340px,calc(100vw - 64px))}#tgt-sugg span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hseg{display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(255,255,255,.08);align-self:flex-start}.hseg button{border:0;background:none;color:rgba(255,255,255,.62);font:inherit;font-size:14px;font-weight:600;padding:7px 16px;border-radius:999px;cursor:pointer;min-height:36px}.hseg button.on{background:rgba(255,255,255,.18);color:#fff}
 .tgt-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:12px;margin:0 -2px;padding:0 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.tgt-track::-webkit-scrollbar{display:none}.tgt-slide{flex:0 0 100%;min-width:0;scroll-snap-align:start;display:flex;flex-direction:column;gap:8px}.tgt-dots{display:flex;justify-content:center;gap:6px;margin-top:-2px}.tgt-dots span{width:6px;height:6px;border-radius:50%;background:var(--line)}.tgt-dots span.on{background:var(--accent);width:16px;border-radius:3px}
+.loan-row{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:rgba(255,255,255,.07);border:0;border-radius:14px;padding:10px 12px;color:inherit;font:inherit;cursor:pointer}.loan-row .lr1{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.loan-row .s{font-size:12px;opacity:.7}.loan-row .ltag{font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(243,200,106,.18);color:#f3c86a;font-weight:600;margin-left:6px}.loan-row .lbar{height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;margin:6px 0 2px}.loan-row .lbar i{display:block;height:100%;background:#f3c86a}.loan-chips{display:flex;flex-wrap:wrap;gap:6px}
 </style>
 </head>
 <body>
@@ -293,7 +294,7 @@ function normalize(d) {
   const s = JSON.parse(JSON.stringify(d || {}));
   s.settings = Object.assign(DEF_SETTINGS(), s.settings || {});
   s.stocks = s.stocks || {};
-  s.accounts = (s.accounts || []).map(a => Object.assign({ disc: 0.6, min: 20, loanRate: 0.025, txns: [], targets: [] }, a));
+  s.accounts = (s.accounts || []).map(a => Object.assign({ disc: 0.6, min: 20, loanRate: 0.025, txns: [], targets: [], loans: [] }, a));
   if (!s.accounts.length) s.accounts = [newAccount('我的帳戶')];
   if (!s.accounts.some(a => a.id === s.cur)) s.cur = s.accounts[0].id;
   for (const c in s.stocks) { s.stocks[c].events = s.stocks[c].events || []; if ((!s.stocks[c].name || s.stocks[c].name === c) && TW_NAMES[c]) s.stocks[c].name = TW_NAMES[c]; }
@@ -340,6 +341,23 @@ function fxTx(t) {
   if (t.type === 'fxint') return Object.assign({}, t, { code: t.cur, shares: t.qty });
   return t;
 }
+// ---- 借款（個人版）：帳戶 loans:[{id,name,kind:'pledge'|'credit',rate,years,start}]；交易 lborrow 借入／lrepay 還本金；付利息記成 type 'loan' 並帶 loan id ----
+const LOAN_ON = window.APP_EDITION === 'personal';
+const LOAN_KIND = { pledge: '股票質押', credit: '信用貸款', other: '其他借款' };
+function loanStats(a) {
+  return (a.loans || []).map(L => {
+    let borrowed = 0, repaid = 0, interest = 0, first = null;
+    for (const t of a.txns) if (t.loan === L.id) {
+      if (t.type === 'lborrow') { borrowed += t.amount; if (!first || t.date < first) first = t.date; }
+      else if (t.type === 'lrepay') repaid += t.amount;
+      else if (t.type === 'loan') interest += t.amount;
+    }
+    const bal = borrowed - repaid, r = (L.rate || 0) / 100 / 12, monthInt = Math.round(bal * r);
+    let pmt = 0;
+    if (L.kind === 'credit' && L.years > 0 && borrowed > 0) { const n = L.years * 12; pmt = Math.round(r ? borrowed * r / (1 - Math.pow(1 + r, -n)) : borrowed / n); }
+    return Object.assign({}, L, { borrowed, repaid, interest, bal, monthInt, pmt, first, start: L.start || first });
+  });
+}
 function feeFor(a, amount) { return amount > 0 ? Math.max(a.min, Math.floor(amount * 0.001425 * a.disc)) : 0; }
 function taxRate(code, date) {
   code = (code || '').toUpperCase();
@@ -371,13 +389,15 @@ const divPaid = t => t.type === 'cash' && t.amount > 0 && payDateOf(t) <= todayI
 function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯示日股的日圓數字）
   const TX = (raw ? a.txns : a.txns.map(twTx)).map(fxTx);
   const pos = {}, realized = {}, divs = {};
-  let inSum = 0, outSum = 0, loanSum = 0, buySum = 0, sellNet = 0, cashSum = 0, origSum = 0, otherSum = 0, firstIn = null;
+  let inSum = 0, outSum = 0, loanSum = 0, buySum = 0, sellNet = 0, cashSum = 0, origSum = 0, otherSum = 0, firstIn = null, borrowSum = 0, repaySum = 0;
   const P = c => pos[c] || (pos[c] = { code: c, shares: 0, cost: 0, buyQty: 0, buyAmt: 0, divOnPos: 0, divRecv: 0, divPool: 0, first: null });
   for (const t of sortTx(TX)) {
     const p = t.code ? P(t.code) : null;
     if (t.type === 'in') { inSum += t.amount; if (!firstIn) firstIn = t.date; }
     else if (t.type === 'out') outSum += t.amount;
     else if (t.type === 'loan') loanSum += t.amount;
+    else if (t.type === 'lborrow') borrowSum += t.amount;
+    else if (t.type === 'lrepay') repaySum += t.amount;
     else if (t.type === 'buy') {
       const c = t.shares * t.price + (t.fee || 0);
       if (p.shares <= 0) { p.first = t.date; p.divOnPos = 0; p.divRecv = 0; p.divPool = 0; p.buyQty = 0; p.buyAmt = 0; }
@@ -420,7 +440,7 @@ function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯�
   const real = realList.reduce((s, r) => s + r.pl, 0), realDiv = realList.reduce((s, r) => s + r.div, 0), realCost = realList.reduce((s, r) => s + r.cost, 0);
   const todayPL = holds.reduce((s, h) => s + h.today, 0);
   const invest = inSum - outSum;
-  const balance = inSum - outSum - buySum + sellNet + cashSum - loanSum;
+  const balance = inSum - outSum - buySum + sellNet + cashSum - loanSum + borrowSum - repaySum, loanBal = borrowSum - repaySum;
   const sellCost = holds.reduce((s, h) => s + (isJP(h.code) || isFX(h.code) ? 0 : feeFor(a, h.mv) + Math.floor(h.mv * taxRate(h.code))), 0);
   const stockPL = unreal + real, netDiv = cashSum - loanSum, total = stockPL + netDiv;
   const days = firstIn ? daysBetween(firstIn, today) : 0;
@@ -443,7 +463,7 @@ function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯�
   const monthsElapsed = +today.slice(5, 7);
   return { holds, mv, cost, unreal, divHeld, unrealRet: cost ? unreal / cost : 0, real, realDiv, realCost, realRet: realCost ? real / realCost : 0, realList, divs: Object.values(divs),
     fxPL: holds.reduce((s, h) => s + (isFX(h.code) ? h.pl : 0), 0), cashSum, origSum, otherSum, wtaxSum: TX.reduce((s, t) => s + (t.type === 'cash' ? t.wtax || 0 : 0), 0), loanSum, netDiv, divCount: a.txns.filter(divPaid).length, inSum, outSum, invest, balance,
-    value: balance + mv, netValue: balance + mv - sellCost, stockPL, total,
+    value: balance + mv, netValue: balance + mv - sellCost, stockPL, total, loanBal, equity: balance + mv - loanBal,
     stockRet: invest ? stockPL / invest : 0, totalRet: invest ? total / invest : 0, days,
     totalAnn: invest ? annualize(total / invest, days) : 0, stockAnn: invest ? annualize(stockPL / invest, days) : 0,
     thisM, nextM, todayPL, todayRet: (mv - todayPL) ? todayPL / (mv - todayPL) : 0,
@@ -831,6 +851,27 @@ function targetCard(a, m) {
 }
 // 每月股息目標：每個帳戶各自設定；還沒設定過的帳戶沿用舊的共用目標
 const goalOf = a => a && a.goal != null ? a.goal : S.settings.goal;
+function heroLoan(a, m) {
+  const L = loanStats(a), act = L.filter(x => x.bal > 0 || !x.borrowed);
+  if (!L.length) return `<div><div class="lbl">借款</div><div class="big" style="font-size:26px">還沒有借款紀錄</div><div class="lbl" style="font-size:12px;margin-top:4px">質押、信貸借來的錢買股，記在這裡就能看到借款餘額、利息與自有資金報酬</div></div>
+    <button class="btn primary" data-a="addLoan" style="align-self:flex-start">新增借款</button>`;
+  const bal = L.reduce((s, x) => s + x.bal, 0), mInt = L.reduce((s, x) => s + x.monthInt, 0), paidInt = L.reduce((s, x) => s + x.interest, 0);
+  const lev = m.equity > 0 ? m.mv / m.equity : 0, divCover = paidInt ? m.cashSum / paidInt : 0;
+  return `<div><div class="lbl">借款餘額（${act.length} 筆）</div><div class="big goldc">${money(bal)}</div><div class="lbl" style="font-size:12px">${m.equity > 0 ? `槓桿 ${grp(lev, 2)} 倍・股票市值 ${money(m.mv)} ÷ 帳戶淨值 ${money(m.equity)}` : '帳戶淨值為負，請確認借款與存入紀錄'}</div></div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="hrow"><span>本月預估利息</span><span class="num">${money(mInt)}</span></div>
+      <div class="hrow"><span>累計已付利息</span><span class="num ${paidInt ? 'downc' : ''}">${money(-paidInt)}</span></div>
+    </div>
+    ${L.map(x => { const p = x.borrowed ? Math.min(1, x.repaid / x.borrowed) : 0; return `<button class="loan-row" data-a="loanAct" data-v="${esc(x.id)}">
+      <span class="lr1"><b>${esc(x.name)}<span class="ltag">${grp(x.rate || 0, 2)}%${x.kind === 'credit' && x.years ? '・' + x.years + ' 年' : ''}</span></b><b class="num goldc">${money(x.bal)}</b></span>
+      <span class="lbar"><i style="width:${(p * 100).toFixed(1)}%"></i></span>
+      <span class="lr1 s"><span class="num">已借 ${money(x.borrowed)}・${x.kind === 'credit' ? '已還 ' + grp(p * 100, 0) + '%' : '已還 ' + money(x.repaid)}</span><span class="num">${x.kind === 'credit' && x.pmt ? '月繳 ' + money(x.pmt) : '月息約 ' + money(x.monthInt)}</span></span>
+    </button>`; }).join('')}
+    <div class="tiles">
+      <button class="tile" data-a="tab" data-v="ledger"><span class="small">總損益（扣利息）</span><span class="v num ${cls(m.total)}" style="font-size:clamp(17px,5.2vw,21px);white-space:nowrap">${arrow(m.total)}${money(m.total, { plus: true })}</span><span class="small num">自有資金報酬 ${pct(m.invest ? m.total / m.invest : 0)}</span></button>
+      <button class="tile" data-a="addLoan"><span class="small">股息 ÷ 利息</span><span class="v num" style="font-size:clamp(17px,5.2vw,21px)">${paidInt ? grp(divCover, 1) + ' 倍' : '—'}</span><span class="small">＋ 新增借款</span></button>
+    </div>`;
+}
 function pageHome(a, m) {
   const goal = goalOf(a), prog = goal ? Math.min(1, Math.max(0, m.monthAvg / goal)) : 0;
   const yearsToGoal = planYears(m.mv, V.plan.m, m.mv ? m.div12 / m.mv : 0.05, V.plan.g / 100, true, goal);
@@ -845,8 +886,8 @@ function pageHome(a, m) {
   </div>
   ${fxNote()}
   <section class="hero">
-    <div class="hseg" role="tablist">${[['stock', '股票'], ['acct', '帳戶資金']].map(([k, n]) => `<button role="tab" aria-selected="${V.heroView === k}" class="${V.heroView === k ? 'on' : ''}" data-a="heroView" data-v="${k}">${n}</button>`).join('')}</div>
-${V.heroView === 'acct' ? `    <div><div class="lbl">帳戶現值（含帳戶餘額）</div><div class="big">${money(m.value)}</div><div class="lbl" style="font-size:12px">帳戶淨值 <span class="num">${money(m.netValue)}</span>・扣除預估賣出費用</div></div>
+    <div class="hseg" role="tablist">${[['stock', '股票'], ['acct', '帳戶資金']].concat(LOAN_ON ? [['loan', '借款']] : []).map(([k, n]) => `<button role="tab" aria-selected="${V.heroView === k}" class="${V.heroView === k ? 'on' : ''}" data-a="heroView" data-v="${k}">${n}</button>`).join('')}</div>
+${V.heroView === 'loan' && LOAN_ON ? heroLoan(a, m) : V.heroView === 'acct' ? `    <div><div class="lbl">帳戶現值（含帳戶餘額）</div><div class="big">${money(m.value)}</div><div class="lbl" style="font-size:12px">帳戶淨值 <span class="num">${money(m.netValue)}</span>・扣除預估賣出費用</div></div>
     <div style="display:flex;flex-direction:column;gap:8px">
       <div class="hrow"><span>投資總額（存入−出金）</span><span class="num">${money(m.invest)}</span></div>
       <div class="hrow"><span>帳戶餘額${m.balance < 0 ? '<span style="font-size:11px;opacity:.7">（負數＝已動用質押借款）</span>' : ''}</span><span class="num ${m.balance < 0 ? 'downc' : ''}">${money(m.balance)}</span></div>
@@ -955,12 +996,13 @@ function pageLedger(a, m) {
   let sum = '', body = '';
   if (V.ledger === 'cash') {
     sum = L('累計存入', money(m.inSum)) + L('投資總額', money(m.invest), '', 'center') + L('出金', money(m.outSum), '', 'right');
-    const list = sortTx(a.txns.filter(t => ['in', 'out', 'fxbuy', 'fxsell', 'fxint'].includes(t.type))).reverse();
+    const list = sortTx(a.txns.filter(t => ['in', 'out', 'fxbuy', 'fxsell', 'fxint', 'lborrow', 'lrepay'].includes(t.type))).reverse();
+    const lnName = t => ((a.loans || []).find(x => x.id === t.loan) || {}).name || '借款';
     const fxs = 'background:#E3EEFB;color:#185FA5';
-    const lab = { in: ['存入', 'background:var(--accent-soft);color:var(--accent)'], out: ['出金', 'background:var(--sunk);color:var(--ink)'], fxbuy: ['買外幣', fxs], fxsell: ['賣外幣', fxs], fxint: ['外幣息', fxs] };
+    const lab = { in: ['存入', 'background:var(--accent-soft);color:var(--accent)'], out: ['出金', 'background:var(--sunk);color:var(--ink)'], fxbuy: ['買外幣', fxs], fxsell: ['賣外幣', fxs], fxint: ['外幣息', fxs], lborrow: ['借入', 'background:var(--gold-soft);color:var(--gold)'], lrepay: ['還款', 'background:var(--gold-soft);color:var(--gold)'] };
     const fxLine = t => `${FX_CURS[t.cur][0]} ${fxAmt(t.cur, t.qty)}`, fxSub = t => t.type === 'fxint' ? '利息' : '匯率 ' + fxRateTxt(t.cur, t.rate);
-    const amt = t => t.type === 'in' ? '+' + money(t.amount) : t.type === 'out' ? '−' + money(t.amount) : t.type === 'fxbuy' ? '−' + money(Math.round(t.qty * t.rate + (t.fee || 0))) : t.type === 'fxsell' ? '+' + money(Math.round(t.qty * t.rate - (t.fee || 0))) : '+' + fxAmt(t.cur, t.qty);
-    body = list.length ? `<div class="list">${list.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><span class="tag" style="${lab[t.type][1]};white-space:nowrap">${lab[t.type][0]}</span><div class="main"><span class="t">${esc(t.memo || ({ in: '現金存入', out: '出金' })[t.type] || fxLine(t))}</span><span class="st num">${roc(t.date)}${t.cur ? '・' + (t.memo ? fxLine(t) + '・' : '') + fxSub(t) : ''}</span></div><span class="num" style="font-weight:600">${amt(t)}</span>${delBtn(t.id)}</div>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有存入或出金紀錄</div></div>`;
+    const amt = t => t.type === 'in' || t.type === 'lborrow' ? '+' + money(t.amount) : t.type === 'out' || t.type === 'lrepay' ? '−' + money(t.amount) : t.type === 'fxbuy' ? '−' + money(Math.round(t.qty * t.rate + (t.fee || 0))) : t.type === 'fxsell' ? '+' + money(Math.round(t.qty * t.rate - (t.fee || 0))) : '+' + fxAmt(t.cur, t.qty);
+    body = list.length ? `<div class="list">${list.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><span class="tag" style="${lab[t.type][1]};white-space:nowrap">${lab[t.type][0]}</span><div class="main"><span class="t">${esc(t.memo || ({ in: '現金存入', out: '出金' })[t.type] || (t.loan ? lnName(t) : fxLine(t)))}</span><span class="st num">${roc(t.date)}${t.cur ? '・' + (t.memo ? fxLine(t) + '・' : '') + fxSub(t) : ''}</span></div><span class="num" style="font-weight:600">${amt(t)}</span>${delBtn(t.id)}</div>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有存入或出金紀錄</div></div>`;
   } else if (V.ledger === 'hold') {
     const dm = S.settings.plMode === 'div', u = dm ? m.unreal + m.divHeld : m.unreal;
     sum = (dm ? L('扣息後成本', money(m.cost - m.divHeld)) : L('持有成本', money(m.cost))) + L(dm ? '損益（含配息）' : '庫存損益', money(u, { plus: true }), cls(u), 'center') + L('報酬率', arrow(u) + pct(m.cost ? u / m.cost : 0), cls(u), 'right');
@@ -1277,6 +1319,7 @@ function pagePlan(a, m) {
 /* ================= 記一筆 (bottom sheet) ================= */
 const TYPES = [['buy', '買進'], ['sell', '賣出'], ['div', '配息／配股'], ['loan', '利息'], ['in', '存入'], ['out', '出金'], ['fxbuy', '買進'], ['fxsell', '賣出'], ['fxint', '利息']];
 const GROUPS = { money: ['資金', ['in', 'out']], trade: ['股票交易', ['buy', 'sell']], div: ['股利', ['div']], fx: ['外幣', ['fxbuy', 'fxsell', 'fxint']] };
+if (LOAN_ON) { GROUPS.lend = ['借款', ['lborrow', 'lrepay', 'lint']]; TYPES.push(['lborrow', '借入'], ['lrepay', '還本金'], ['lint', '付利息']); }
 const groupOf = t => Object.keys(GROUPS).find(g => GROUPS[g][1].includes(t)) || 'trade';
 function contextType() {
   if (V.page === 'stock') return 'buy';
@@ -1302,6 +1345,7 @@ function openEdit(id) {
     if (t.type === 'cash') { sh.f.per = t.perShare != null ? String(t.perShare) : ''; sh.f.perStock = ''; sh.cashTouched = true; sh.f.cash = String(origOf(t)); sh.otherTouched = true; sh.f.other = String(t.other || 0); sh.f.interest = t.interest ? String(t.interest) : ''; if (isJP(t.code)) { sh.wtaxTouched = true; sh.f.wtax = String(t.wtax || 0); if (t.fx) sh.f.fx = String(t.fx); } }
     else { delete sh.f.held; sh.f.per = ''; sh.f.perStock = t.perShare != null ? String(t.perShare) : ''; sh.sshTouched = true; sh.f.stockSh = String(t.shares); sh.cashTouched = true; sh.f.cash = ''; }
   } else if (t.type.startsWith('fx')) { sh.cur = t.cur; sh.f.fqty = String(t.qty); if (t.rate) sh.f.fxrate = String(t.rate); if (t.fee) sh.f.fee = String(t.fee); }
+  else if (t.loan && LOAN_ON) { sh.type = t.type === 'loan' ? 'lint' : t.type; sh.loanId = t.loan; sh.f.lamt = String(t.amount); }
   else sh.f.amount = String(t.amount);
   V.sheet = sh; render();
 }
@@ -1397,6 +1441,21 @@ function renderSheetInner(only) {
       ${memoF('例：115 年 11 月配息')}
       <button class="btn ghost" data-a="divQuery" style="color:var(--ex);font-size:17px">查詢／試算股利</button>
       ${evNote ? `<p class="small" style="margin:0">${evNote}</p>` : ''}`;
+  } else if (t === 'lborrow' || t === 'lrepay' || t === 'lint') {
+    const L = loanStats(a), isNew = t === 'lborrow' && (sh.loanId === '__new' || !L.length), cur = isNew ? null : L.find(x => x.id === sh.loanId) || L[0];
+    if (cur && !sh.loanId) sh.loanId = cur.id;
+    const kind = sh.lkind || (cur && cur.kind) || 'pledge';
+    const suggest = !cur ? 0 : t === 'lint' ? cur.monthInt : t === 'lrepay' ? (cur.kind === 'credit' && cur.pmt ? Math.max(0, Math.min(cur.bal, cur.pmt - cur.monthInt)) : cur.bal) : 0;
+    const amt = f.lamt != null && f.lamt !== '' ? num(f.lamt) : suggest;
+    const chips = L.map(x => [x.id, esc(x.name)]).concat(t === 'lborrow' ? [['__new', '＋ 新增借款']] : []);
+    body = `${chips.length ? `<div class="loan-chips">${chips.map(([id, n]) => `<button type="button" class="btn small ${(isNew ? '__new' : cur && cur.id) === id ? 'primary' : 'ghost'}" data-a="loanPick" data-v="${esc(id)}">${n}</button>`).join('')}</div>` : `<p class="small" style="margin:0">先新增一筆借款（例如元大證金股票質押、信用貸款），借到的錢會撥進帳戶餘額。</p>`}
+      ${t === 'lborrow' ? `<div class="grid2">${field('x-lname', '借款名稱', inp('x-lname', 'lname', f.lname ?? (cur ? cur.name : ''), 'placeholder="例：元大證金 股票質押"'))}${field('x-lrate', '年利率 %', inp('x-lrate', 'lrate', f.lrate ?? (cur ? cur.rate : ''), 'class="num" type="text" inputmode="decimal" placeholder="3.92"'))}</div>
+      ${segBar(Object.entries(LOAN_KIND), kind, 'lkind')}
+      ${kind === 'credit' ? field('x-lyears', '貸款年數（算每月還款）', inp('x-lyears', 'lyears', f.lyears ?? (cur ? cur.years || '' : ''), 'class="num" type="text" inputmode="numeric" placeholder="7"')) : ''}` : ''}
+      <div class="grid2">${field('x-lamt', t === 'lborrow' ? '借入金額' : t === 'lrepay' ? '還本金金額' : '利息金額', inp('x-lamt', 'lamt', f.lamt ?? (suggest || ''), 'class="bignum" type="text" inputmode="numeric" placeholder="0"'), 'focus')}${dateF()}</div>
+      ${cur ? `<p class="small" style="margin:0">${esc(cur.name)}：餘額 ${money(cur.bal, { show: true })}・本月利息約 ${money(cur.monthInt, { show: true })}${cur.kind === 'credit' && cur.pmt ? `・每月還款約 ${money(cur.pmt, { show: true })}（本金 ${money(Math.max(0, cur.pmt - cur.monthInt), { show: true })}＋利息 ${money(cur.monthInt, { show: true })}）` : ''}</p>` : ''}
+      <div class="card pad" data-live="lnet" style="background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="k">${t === 'lborrow' ? '撥入帳戶餘額' : t === 'lrepay' ? '從帳戶餘額扣除・借款餘額減少' : '從帳戶餘額扣除・計入利息成本'}</span><b class="num ${t === 'lborrow' ? 'goldc' : ''}" style="font-size:20px">${t === 'lborrow' ? '+' : '−'}$${grp(amt)}</b></div>
+      ${memoF()}`;
   } else if (t.startsWith('fx')) {
     const cur = sh.cur || 'USD', q = num(f.fqty), r = f.fxrate != null && f.fxrate !== '' ? num(f.fxrate) : fxRate(cur), fee = num(f.fee);
     const held = (compute(a).holds.find(h => h.code === cur) || {}).shares || 0;
@@ -1463,6 +1522,20 @@ function saveSheet() {
     const ev = sh.ev && sh.filledFor === code ? sh.ev : null;
     if (d.cash > 0) txs.push(Object.assign({ id: uid(), type: 'cash', code, shares: d.held, perShare: d.per || undefined, gross: d.cash, other: d.other, amount: d.cash - d.other - d.wtax, interest: d.interest, wtax: d.jp ? d.wtax : undefined, fx: d.jp ? (num(f.fx) || jpyRate()) : undefined, ev: ev ? ev.id : undefined }, base));
     if (d.stockSh > 0) txs.push(Object.assign({ id: uid(), type: 'stock', code, shares: d.stockSh, perShare: d.perStock || undefined, ev: ev ? ev.id : undefined }, base));
+  } else if (t === 'lborrow' || t === 'lrepay' || t === 'lint') {
+    a0.loans = a0.loans || [];
+    let L = sh.loanId === '__new' ? null : a0.loans.find(x => x.id === sh.loanId) || (t !== 'lborrow' ? a0.loans[0] : null);
+    const lamtEl = $('#x-lamt'), amount = Math.round(num(f.lamt != null && f.lamt !== '' ? f.lamt : lamtEl ? lamtEl.value : 0));
+    if (t === 'lborrow') {
+      const name = String(f.lname ?? (L ? L.name : '')).trim(), rate = num(f.lrate ?? (L ? L.rate : 0)), kind = sh.lkind || (L ? L.kind : 'pledge'), years = num(f.lyears ?? (L ? L.years : 0));
+      if (!name) return toast('請填借款名稱');
+      if (!(amount > 0)) return toast('請填金額');
+      if (!L) { L = { id: uid(), name, kind, rate, years: kind === 'credit' ? years : undefined, start: sh.date || todayISO() }; a0.loans.push(L); }
+      else Object.assign(L, { name, kind, rate, years: kind === 'credit' ? years : undefined });
+    }
+    if (!L) return toast('請先選擇借款');
+    if (!(amount > 0)) return toast('請填金額');
+    txs.push(Object.assign({ id: uid(), type: t === 'lint' ? 'loan' : t, loan: L.id, amount }, base, t === 'lint' && !base.memo ? { memo: L.name + ' 利息' } : {}));
   } else if (t.startsWith('fx')) {
     const cur = sh.cur || 'USD', qty = num(f.fqty);
     if (!(qty > 0)) return toast('請填外幣金額');
@@ -1511,6 +1584,8 @@ document.addEventListener('click', e => {
   const a = el.dataset.a, v = el.dataset.v;
   if (a !== 'del' && a !== 'logout') V.armed = null;
   switch (a) {
+    case 'addLoan': openSheet('lborrow'); V.sheet.loanId = '__new'; render(); return;
+    case 'loanAct': { const L = (acc().loans || []).find(x => x.id === v); openSheet(L && L.kind === 'credit' ? 'lrepay' : 'lint'); V.sheet.loanId = v; render(); return; }
     case 'heroView': V.heroView = v; try { localStorage.setItem('wwc-hero', v); } catch (x) {} break;
     case 'tgtEdit': V.tgtEdit = !V.tgtEdit; break;
     case 'tgtDel': { const a0 = acc(); a0.targets = (a0.targets || []).filter((_, i) => i !== +v); persist(); break; }
@@ -1629,6 +1704,8 @@ document.addEventListener('click', e => {
     case 'stype': V.sheet.ev = null; V.sheet.filledFor = null; V.sheet.type = v; V.sheet.f = {}; V.sheet.feeTouched = V.sheet.taxTouched = false; break;
     case 'unit': V.sheet.unit = v; break;
     case 'fxcur': V.sheet.cur = v; delete V.sheet.f.fxrate; break;
+    case 'loanPick': V.sheet.loanId = v; ['lname', 'lrate', 'lyears', 'lamt'].forEach(k => delete V.sheet.f[k]); V.sheet.lkind = null; break;
+    case 'lkind': V.sheet.lkind = v; break;
     case 'save': saveSheet(); return;
     case 'planM': V.plan.m = +v; break;
     case 'planRe': V.plan.re = !V.plan.re; break;
@@ -1650,7 +1727,7 @@ document.addEventListener('input', e => {
     else if (k === 'rate') { sh.rate = num(el.value); sh.feeTouched = false; refreshSheetTotals(); return; }
     else if (k === 'date') { sh.date = el.value; if (sh.type === 'div') refreshSheetTotals(); }
     else { sh.f[k] = el.value; if (k === 'fee') sh.feeTouched = true; if (k === 'tax') sh.taxTouched = true; if (k === 'cash') sh.cashTouched = el.value !== ''; if (k === 'stockSh') sh.sshTouched = el.value !== ''; if (k === 'other') sh.otherTouched = el.value !== ''; if (k === 'wtax') sh.wtaxTouched = el.value !== ''; }
-    if (['qty', 'price', 'fee', 'tax', 'per', 'perStock', 'held', 'shares', 'cash', 'stockSh', 'other', 'interest', 'wtax', 'fx', 'fqty', 'fxrate'].includes(k)) { refreshSheetTotals(el); }
+    if (['qty', 'price', 'fee', 'tax', 'per', 'perStock', 'held', 'shares', 'cash', 'stockSh', 'other', 'interest', 'wtax', 'fx', 'fqty', 'fxrate', 'lamt'].includes(k)) { refreshSheetTotals(el); }
   }
 });
 document.addEventListener('change', e => {
