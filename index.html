@@ -891,10 +891,7 @@ function heroLoan(a, m) {
       <span class="lbar"><i style="width:${(p * 100).toFixed(1)}%"></i></span>
       <span class="lr1 s"><span class="num">已借 ${money(x.borrowed)}・${x.kind === 'credit' ? '已還 ' + grp(p * 100, 0) + '%' : '已還 ' + money(x.repaid)}</span><span class="num">${x.kind === 'credit' && x.pmt ? '月繳 ' + money(x.pmt) : '月息約 ' + money(x.monthInt)}</span></span>
     </button>`; }).join('')}
-    <div class="tiles">
-      <button class="tile" data-a="tab" data-v="ledger"><span class="small">總損益（扣利息）</span><span class="v num ${cls(m.total)}" style="font-size:clamp(17px,5.2vw,21px);white-space:nowrap">${arrow(m.total)}${money(m.total, { plus: true })}</span><span class="small num">自有資金報酬 ${pct(m.invest ? m.total / m.invest : 0)}</span></button>
-      <button class="tile" data-a="addLoan"><span class="small">股息 ÷ 利息</span><span class="v num" style="font-size:clamp(17px,5.2vw,21px)">${paidInt ? grp(divCover, 1) + ' 倍' : '—'}</span><span class="small">＋ 新增借款</span></button>
-    </div>`;
+  `;
 }
 function pageHome(a, m) {
   const goal = goalOf(a), prog = goal ? Math.min(1, Math.max(0, m.monthAvg / goal)) : 0;
