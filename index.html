@@ -356,8 +356,8 @@ function loanTranches(a, skip) {
       let left = r.amount;
       const target = r.tr && tr.find(x => x.id === r.tr);
       // 指定了哪一筆：只還那一筆，多的不會流到其他筆；沒指定的舊紀錄才依先借先還分配
-      if (target) { const owe = target.principal - target.pays.reduce((s, p) => s + p.amt, 0); const amt = Math.min(Math.max(0, owe), left); if (amt > 0) target.pays.push({ date: r.date < target.date ? target.date : r.date, amt }); continue; }
-      for (const x of tr) { if (left <= 0) break; const owe = x.principal - x.pays.reduce((s, p) => s + p.amt, 0); if (owe <= 0 || x.date > r.date) continue; const amt = Math.min(owe, left); x.pays.push({ date: r.date, amt }); left -= amt; }
+      if (target) { const owe = target.principal - target.pays.reduce((s, p) => s + p.amt, 0); const amt = Math.min(Math.max(0, owe), left); if (amt > 0) target.pays.push({ date: r.date < target.date ? target.date : r.date, amt, src: r.src }); continue; }
+      for (const x of tr) { if (left <= 0) break; const owe = x.principal - x.pays.reduce((s, p) => s + p.amt, 0); if (owe <= 0 || x.date > r.date) continue; const amt = Math.min(owe, left); x.pays.push({ date: r.date, amt, src: r.src }); left -= amt; }
     }
     for (const x of tr) {
       let bal = x.principal, from = x.date, acc = 0, end = today;
@@ -365,7 +365,7 @@ function loanTranches(a, skip) {
       if (bal > 0) acc += bal * x.rate / 100 * loanDays(from, today) / 365;
       const r = x.rate / 100 / 12;
       let pmt = 0; if (x.kind === 'credit' && x.years > 0) { const n = x.years * 12; pmt = Math.round(r ? x.principal * r / (1 - Math.pow(1 + r, -n)) : x.principal / n); }
-      out.push(Object.assign(x, { repaid: x.principal - Math.max(0, bal), bal: Math.max(0, bal), monthInt: Math.round(Math.max(0, bal) * r), accrued: Math.round(acc), days: loanDays(x.date, bal > 0 ? today : end), paidOff: bal <= 0, pmt }));
+      out.push(Object.assign(x, { byDiv: x.pays.reduce((s, p) => s + (p.src === 'div' ? p.amt : 0), 0), byDca: x.pays.reduce((s, p) => s + (p.src === 'dca' ? p.amt : 0), 0), repaid: x.principal - Math.max(0, bal), bal: Math.max(0, bal), monthInt: Math.round(Math.max(0, bal) * r), accrued: Math.round(acc), days: loanDays(x.date, bal > 0 ? today : end), paidOff: bal <= 0, pmt }));
     }
   }
   return out;
@@ -1052,18 +1052,19 @@ function pageLedger(a, m) {
     sum = L('借款餘額', money(bal), 'gold') + L('本月預估利息', money(mi), '', 'center') + L('累積利息', money(-accInt), '', 'right');
     const lnName = id => (LS.find(x => x.id === id) || {}).name || '借款';
     const recs = sortTx(a.txns.filter(t => t.loan && ['lborrow', 'lrepay', 'loan'].includes(t.type))).reverse();
-    const tg = { lborrow: '借入', lrepay: '還款', loan: '利息' };
+    const tg = { lborrow: '借入', lrepay: '還款', loan: '利息' }, SRC = { div: '股利', dca: '定期定額' };
     const multi = id => T.filter(x => x.loanId === id).length > 1;
     body = (T.length ? `<div class="ln-track" data-n="${T.length}">${T.map(x => { const p = x.principal ? Math.min(1, x.repaid / x.principal) : 0; return `<button class="card pad rowbtn loan-card ln-slide ${x.paidOff ? 'off' : ''}" data-a="loanRepay" data-v="${esc(x.loanId)}" data-tr="${esc(x.id)}">
         <span class="lc1"><b>${esc(x.name)}${multi(x.loanId) ? `<span class="small" style="font-weight:500">　第 ${x.no} 筆</span>` : ''}</b><span class="tag" style="background:var(--gold-soft);color:var(--gold)">${LOAN_KIND[x.kind] || '借款'}・${grp(x.rate, 2)}%${x.kind === 'credit' && x.years ? '・' + x.years + ' 年' : ''}</span></span>
         <span class="lc3"><span><span class="k">借款金額</span><b class="num">${money(x.principal)}</b></span><span><span class="k">已還本金</span><b class="num">${money(x.repaid)}</b></span><span style="text-align:right"><span class="k">餘額</span><b class="num gold">${money(x.bal)}</b></span></span>
         <span class="bar"><span style="width:${(p * 100).toFixed(1)}%;background:var(--gold)"></span></span>
         <span class="lc1 small"><span class="num">每月利息 ${money(x.monthInt)}${x.kind === 'credit' && x.pmt && !x.paidOff ? `（月繳 ${money(x.pmt)}）` : ''}</span><span class="num">累積利息 ${money(x.accrued)}</span></span>
+        ${x.byDiv || x.byDca ? `<span class="lc1 small"><span class="num">股利還 ${money(x.byDiv)}</span><span class="num">定期定額還 ${money(x.byDca)}</span></span>` : ''}
         <span class="lc1 small"><span class="num">${roc(x.date)} 借入・${x.paidOff ? '已還清（' + x.days + ' 天）' : '已借 ' + x.days + ' 天'}</span><span style="color:var(--accent);font-weight:600">${x.paidOff ? '' : '點一下記還款 ›'}</span></span>
       </button>`; }).join('')}</div>${T.length > 1 ? `<div class="tgt-dots ln-dots" aria-hidden="true">${T.map((_, k) => `<span class="${k === (V.lnIdx || 0) % T.length ? 'on' : ''}"></span>`).join('')}</div>` : ''}` : `<div class="list"><div class="empty">還沒有借款紀錄</div></div>`) +
       `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" data-a="addLoan">＋ 新增借款</button>${LS.length ? `<button class="btn small ghost" data-a="loanInt">記利息</button>` : ''}</div>` +
       `<div class="h2row"><h2 style="font-size:15px">每筆紀錄</h2><span class="small">點一筆可修改</span></div>` +
-      (recs.length ? `<div class="list">${recs.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><span class="tag" style="background:var(--gold-soft);color:var(--gold);white-space:nowrap">${tg[t.type]}</span><div class="main"><span class="t">${esc(lnName(t.loan))}</span><span class="st num">${roc(t.date)}${t.memo && t.memo !== lnName(t.loan) + ' 利息' ? '・' + esc(t.memo) : ''}</span></div><span class="num" style="font-weight:600">${t.type === 'lborrow' ? '+' : '−'}${money(t.amount)}</span>${delBtn(t.id)}</div>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有借入、還款或利息紀錄</div></div>`);
+      (recs.length ? `<div class="list">${recs.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><span class="tag" style="background:var(--gold-soft);color:var(--gold);white-space:nowrap">${tg[t.type]}</span><div class="main"><span class="t">${esc(lnName(t.loan))}</span><span class="st num">${roc(t.date)}${t.type === 'lrepay' && SRC[t.src] ? '・' + SRC[t.src] : ''}${t.memo && t.memo !== lnName(t.loan) + ' 利息' ? '・' + esc(t.memo) : ''}</span></div><span class="num" style="font-weight:600">${t.type === 'lborrow' ? '+' : '−'}${money(t.amount)}</span>${delBtn(t.id)}</div>`).join('')}</div>` : `<div class="list"><div class="empty">還沒有借入、還款或利息紀錄</div></div>`);
   } else {
     sum = L('原始股利', money(m.origSum)) + L(m.wtaxSum ? '匯費・日本稅' : '匯費', money(-m.otherSum), '', 'center') + L('利息', money(-m.loanSum), '', 'center') + L('最後股利', money(m.netDiv), 'gold', 'right');
     const pend = pendingDivs(a);
@@ -1386,7 +1387,7 @@ function openEdit(id) {
     if (t.type === 'cash') { sh.f.per = t.perShare != null ? String(t.perShare) : ''; sh.f.perStock = ''; sh.cashTouched = true; sh.f.cash = String(origOf(t)); sh.otherTouched = true; sh.f.other = String(t.other || 0); sh.f.interest = t.interest ? String(t.interest) : ''; if (isJP(t.code)) { sh.wtaxTouched = true; sh.f.wtax = String(t.wtax || 0); if (t.fx) sh.f.fx = String(t.fx); } }
     else { delete sh.f.held; sh.f.per = ''; sh.f.perStock = t.perShare != null ? String(t.perShare) : ''; sh.sshTouched = true; sh.f.stockSh = String(t.shares); sh.cashTouched = true; sh.f.cash = ''; }
   } else if (t.type.startsWith('fx')) { sh.cur = t.cur; sh.f.fqty = String(t.qty); if (t.rate) sh.f.fxrate = String(t.rate); if (t.fee) sh.f.fee = String(t.fee); }
-  else if (t.loan && LOAN_ON) { sh.type = t.type === 'loan' ? 'lint' : t.type; sh.loanId = t.loan; sh.trId = t.tr || null; sh.f.lamt = String(t.amount); }
+  else if (t.loan && LOAN_ON) { sh.type = t.type === 'loan' ? 'lint' : t.type; sh.loanId = t.loan; sh.trId = t.tr || null; sh.lsrc = t.src || null; sh.f.lamt = String(t.amount); }
   else sh.f.amount = String(t.amount);
   V.sheet = sh; render();
 }
@@ -1497,6 +1498,7 @@ function renderSheetInner(only) {
       ${segBar(Object.entries(LOAN_KIND), kind, 'lkind')}
       ${kind === 'credit' ? field('x-lyears', '貸款年數（算每月還款）', inp('x-lyears', 'lyears', f.lyears ?? (cur ? cur.years || '' : ''), 'class="num" type="text" inputmode="numeric" placeholder="7"')) : ''}` : ''}
       ${t === 'lrepay' && trs.length > 1 ? `<div class="loan-chips">${trs.map(x => `<button type="button" class="btn small ${x.id === sh.trId ? 'primary' : 'ghost'}" data-a="trPick" data-v="${esc(x.id)}">${roc(x.date)}・餘 ${money(x.bal, { show: true })}</button>`).join('')}</div>` : ''}
+      ${t === 'lrepay' ? `<p class="small" style="margin:0">這次用什麼還？</p>${segBar([['dca', '定期定額'], ['div', '股利']], sh.lsrc || 'dca', 'lsrc')}` : ''}
       <div class="grid2">${field('x-lamt', t === 'lborrow' ? '借入金額' : t === 'lrepay' ? '還本金金額' : '利息金額', inp('x-lamt', 'lamt', f.lamt ?? (suggest || ''), 'class="bignum" type="text" inputmode="numeric" placeholder="0"'), 'focus')}${dateF()}</div>
       ${cur ? `<p class="small" style="margin:0">${esc(cur.name)}：餘額 ${money(cur.bal, { show: true })}・本月利息約 ${money(cur.monthInt, { show: true })}${cur.kind === 'credit' && cur.pmt ? `・每月還款約 ${money(cur.pmt, { show: true })}（本金 ${money(Math.max(0, cur.pmt - cur.monthInt), { show: true })}＋利息 ${money(cur.monthInt, { show: true })}）` : ''}</p>` : ''}
       <div class="card pad" data-live="lnet" style="background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="k">${t === 'lborrow' ? '撥入帳戶餘額' : t === 'lrepay' ? '從帳戶餘額扣除・借款餘額減少' : '從帳戶餘額扣除・計入利息成本'}</span><b class="num ${t === 'lborrow' ? 'goldc' : ''}" style="font-size:20px">${t === 'lborrow' ? '+' : '−'}$${grp(amt)}</b></div>
@@ -1591,7 +1593,7 @@ function saveSheet() {
       if (x && amount > x.bal) return toast(`這一筆只剩 ${money(x.bal, { show: true })} 沒還`);
       if (x && (sh.date || todayISO()) < x.date) return toast(`還款日不能早於這筆的借入日 ${roc(x.date)}`);
     }
-    txs.push(Object.assign({ id: uid(), type: t === 'lint' ? 'loan' : t, loan: L.id, amount }, base, t === 'lrepay' && sh.trId ? { tr: sh.trId } : {}, t === 'lint' && !base.memo ? { memo: L.name + ' 利息' } : {}));
+    txs.push(Object.assign({ id: uid(), type: t === 'lint' ? 'loan' : t, loan: L.id, amount }, base, t === 'lrepay' && sh.trId ? { tr: sh.trId } : {}, t === 'lrepay' ? { src: sh.lsrc || 'dca' } : {}, t === 'lint' && !base.memo ? { memo: L.name + ' 利息' } : {}));
   } else if (t.startsWith('fx')) {
     const cur = sh.cur || 'USD', qty = num(f.fqty);
     if (!(qty > 0)) return toast('請填外幣金額');
@@ -1641,7 +1643,7 @@ document.addEventListener('click', e => {
   if (a !== 'del' && a !== 'logout') V.armed = null;
   switch (a) {
     case 'addLoan': openSheet('lborrow'); V.sheet.loanId = '__new'; render(); return;
-    case 'loanAct': case 'loanRepay': openSheet('lrepay'); V.sheet.loanId = v; V.sheet.trId = el.dataset.tr || null; render(); return;
+    case 'loanAct': case 'loanRepay': openSheet('lrepay'); V.sheet.loanId = v; { const last = sortTx(acc().txns.filter(t => t.type === 'lrepay' && t.src)).pop(); V.sheet.lsrc = last ? last.src : 'dca'; } V.sheet.trId = el.dataset.tr || null; render(); return;
     case 'trPick': V.sheet.trId = v; delete V.sheet.f.lamt; break;
     case 'loanInt': openSheet('lint'); render(); return;
     case 'heroView': V.heroView = v; try { localStorage.setItem('wwc-hero', v); } catch (x) {} break;
@@ -1764,6 +1766,7 @@ document.addEventListener('click', e => {
     case 'fxcur': V.sheet.cur = v; delete V.sheet.f.fxrate; break;
     case 'loanPick': V.sheet.loanId = v; V.sheet.trId = null; ['lname', 'lrate', 'lyears', 'lamt'].forEach(k => delete V.sheet.f[k]); V.sheet.lkind = null; break;
     case 'lkind': V.sheet.lkind = v; break;
+    case 'lsrc': V.sheet.lsrc = v; break;
     case 'save': saveSheet(); return;
     case 'planM': V.plan.m = +v; break;
     case 'planRe': V.plan.re = !V.plan.re; break;
