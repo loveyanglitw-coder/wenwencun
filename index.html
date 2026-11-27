@@ -1155,7 +1155,8 @@ function pageStock(a, m) {
   ${divRecords(sortTx(a.txns.filter(t => t.code === code && (t.type === 'cash' || t.type === 'stock'))).reverse(), false)}
   <div class="h2row"><h2>交易紀錄</h2><span class="small">點一筆可修改</span></div>
   <div class="list">${txs.length ? txs.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><div class="main"><span class="t">${tname[t.type] || t.type}${t.type === 'buy' || t.type === 'sell' ? ' ' + grp(t.shares) + ' 股 @ ' + grp(t.price, 2) : t.type === 'cash' ? ' ' + grp(t.shares) + ' 股 × ' + t.perShare : t.type === 'stock' ? ' ' + grp(t.shares) + ' 股' : ''}${t.auto ? ' <span class="small">（自動）</span>' : ''}</span><span class="st num">${roc(t.date)}${t.fx ? '・匯率 ' + t.fx : ''}${t.fee ? '・手續費 ' + (isJP(t.code) ? yen(t.fee) : money(t.fee, { show: true })) : ''}${t.tax ? '・證交稅 ' + money(t.tax, { show: true }) : ''}${t.nhi ? '・補充保費 ' + money(t.nhi, { show: true }) : ''}</span></div><b class="num ${t.type === 'cash' ? 'gold' : ''}">${t.type === 'buy' ? '−' + txAmt(t, t.shares * t.price + (t.fee || 0)) : t.type === 'sell' ? '+' + txAmt(t, t.shares * t.price - (t.fee || 0) - (t.tax || 0)) : t.type === 'cash' ? '+' + txAmt(t, t.amount) : '+' + grp(t.shares) + ' 股'}</b>${delBtn(t.id)}</div>`).join('') : '<div class="empty">沒有紀錄</div>'}</div>
-  <div style="display:flex;gap:10px"><a class="btn" href="${yq}" target="_blank" rel="noopener">看線圖</a><button class="btn primary" style="flex:1" data-a="add" data-v="buy" data-code="${esc(code)}">記一筆 ${esc(code)}</button></div>`;
+  <div style="display:flex;gap:10px"><a class="btn" href="${yq}" target="_blank" rel="noopener">看線圖</a><button class="btn primary" style="flex:1" data-a="add" data-v="buy" data-code="${esc(code)}">記一筆 ${esc(code)}</button></div>
+  ${(() => { const nAll = a.txns.filter(t => t.code === code).length; if (!nAll) return ''; const k = 'stk:' + code, armed = V.armed === k; return `<button class="btn ${armed ? 'danger' : 'ghost'}" style="width:100%;margin-top:4px" data-a="del" data-v="${esc(k)}">${armed ? `確定刪除 ${esc(code)} 的 ${nAll} 筆紀錄（買賣＋股利）` : `刪除這檔（${esc(code)} 全部紀錄）`}</button>`; })()}`;
 }
 function divChart(list) {
   if (!list.length) return `<div class="empty" style="padding:16px">還沒有配息紀錄</div>`;
@@ -1728,6 +1729,7 @@ document.addEventListener('click', e => {
       V.armed = null;
       if (mode === 'demo') { toast('範例資料不能刪除，開始記帳後才能編輯'); break; }
       if (v.startsWith('acc:')) { const id = v.slice(4); const nm = (S.accounts.find(x => x.id === id) || {}).name; S.accounts = S.accounts.filter(x => x.id !== id); if (S.cur === id) S.cur = S.accounts[0].id; V.openAcc = null; toast('已刪除帳戶「' + nm + '」'); }
+      else if (v.startsWith('stk:')) { const code = v.slice(4), a0 = acc(), n0 = a0.txns.length; a0.txns = a0.txns.filter(t => t.code !== code); toast(`已刪除 ${code} 的 ${n0 - a0.txns.length} 筆紀錄`); if (V.page === 'stock') { if (V.prev && V.prev.page && V.prev.page !== 'stock') { V.page = V.prev.page; V.code = V.prev.code; } else V.page = null; V.prev = null; } }
       else if (v.startsWith('ev:')) { const id = v.slice(3); const st = S.stocks[V.code]; if (st) st.events = st.events.filter(x => x.id !== id); toast('已刪除公告'); }
       else { const a0 = acc(), o = a0.txns.find(t => t.id === v), pr = o && o.pair; a0.txns = a0.txns.filter(t => t.id !== v && !(pr && t.pair === pr)); toast(pr ? '已刪除（本金＋利息兩筆）' : '已刪除'); }
       persist(); break;
