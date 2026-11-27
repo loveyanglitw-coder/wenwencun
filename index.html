@@ -312,7 +312,8 @@ try { const t = localStorage.getItem('wwc-tab'); if (['home', 'ledger', 'hist', 
 
 const acc = () => S.accounts.find(a => a.id === S.cur) || S.accounts[0];
 const stockName = c => { if (FX_CURS[c]) return FX_CURS[c][0]; const n = S.stocks[c] && S.stocks[c].name; return (n && n !== c ? n : TW_NAMES[c]) || n || ''; };
-const sortTx = list => list.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+const TX_RANK = { buy: 0, stock: 0, sell: 2 }, txRank = t => TX_RANK[t.type] ?? 1; // 同一天：先算買進／配股，再算賣出（現沖、先賣後買都不會被少算）
+const sortTx = list => list.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : txRank(a) - txRank(b));
 
 // ---- 日股（個人版）：代號以 .T 結尾；交易、股利以日圓記錄，每筆帶入帳匯率 fx（1 日圓＝幾台幣），計算時換成台幣 ----
 const JP_ON = true; // 個人版、公開版都可記日股
