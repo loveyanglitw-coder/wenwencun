@@ -932,7 +932,7 @@ function pageHome(a, m) {
   </div>
   ${fxNote()}
   <section class="hero">
-    <div class="hseg" role="tablist">${[['stock', '股票'], ['acct', '帳戶資金']].concat(LOAN_ON ? [['loan', '借款']] : [], [['fx', '外幣']]).map(([k, n]) => `<button role="tab" aria-selected="${V.heroView === k}" class="${V.heroView === k ? 'on' : ''}" data-a="heroView" data-v="${k}">${n}</button>`).join('')}</div>
+    <div class="hseg" role="tablist">${[['stock', '股票'], ['acct', '帳戶資金'], ['fx', '外幣']].concat(LOAN_ON ? [['loan', '借款']] : []).map(([k, n]) => `<button role="tab" aria-selected="${V.heroView === k}" class="${V.heroView === k ? 'on' : ''}" data-a="heroView" data-v="${k}">${n}</button>`).join('')}</div>
 ${V.heroView === 'loan' && LOAN_ON ? heroLoan(a, m) : V.heroView === 'fx' ? heroFx(a, m) : V.heroView === 'acct' ? `    <div><div class="lbl">帳戶現值（含帳戶餘額）</div><div class="big">${money(m.value)}</div><div class="lbl" style="font-size:12px">帳戶淨值 <span class="num">${money(m.netValue)}</span>・扣除預估賣出費用</div></div>
     <div style="display:flex;flex-direction:column;gap:8px">
       <div class="hrow"><span>投資總額（存入−出金${m.repayExt ? '＋定額還款' : ''}）</span><span class="num">${money(m.invest)}</span></div>
@@ -1379,8 +1379,8 @@ const MANUAL = [
   ['總覽黑欄怎麼看', [
     ['股票', '只算股票：總價值（市值）、總成本、未實現／已實現損益、本月與下月可領股息。外幣不算在這裡。'],
     ['帳戶資金', '帳戶現值＝帳戶餘額＋股票與外幣市值。投資總額＝存入－出金（＋用定期定額或其他來源還的借款、外幣存入）。帳戶餘額＝存入－出金－買進花費＋賣出淨收入＋現金股利－利息＋借入－從帳戶扣的還款。'],
-    ['借款', '未還清的借款餘額、累積利息、扣除借款後淨值。每一筆借入是一張卡片，可左右滑。'],
     ['外幣', '每個幣別的持有金額、今日匯率、台幣市值和匯差損益。'],
+    ['借款', '未還清的借款餘額、累積利息、扣除借款後淨值。每一筆借入是一張卡片，可左右滑。'],
     ['上方的台幣／日幣／美元', '把整個 App 的金額改用該幣別顯示，只是換算顯示，不會改到資料。']
   ]],
   ['記帳（＋）', [
