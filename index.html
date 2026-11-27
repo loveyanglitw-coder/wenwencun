@@ -834,6 +834,7 @@ function render() {
   else if (V.page === 'fx') html = pageFx(a, m);
   else if (V.page === 'accounts') html = pageAccounts(a, m);
   else if (V.page === 'plan') html = pagePlan(a, m);
+  else if (V.page === 'manual') html = pageManual();
   else html = ({ home: pageHome, ledger: pageLedger, hist: pageHist, cal: pageCal })[V.tab](a, m);
   painting = true; try { $('#app').innerHTML = banner() + html; } finally { painting = false; }
   renderNav();
@@ -1363,8 +1364,68 @@ function pageAccounts(a0, m0) {
       <div class="row"><div class="main"><span style="font-size:15px">股價與除權息資料</span><span class="st">${MARKET ? '每個交易日 15:00 從 Yahoo股市自動更新・最後更新 ' + esc(MARKET.updated || MARKET.date || '') : '每個交易日 15:00 從 Yahoo股市自動更新（尚未收到第一次資料）'}</span></div>${window.APP_REPO ? `<a class="btn small" href="https://github.com/${esc(window.APP_REPO)}/actions" target="_blank" rel="noopener">立即更新</a>` : ''}</div>
       ${FB.user ? `<div class="row"><div class="main"><span style="font-size:15px">登入帳號</span><span class="st">${esc(FB.user.email || FB.user.displayName || '')}・${EDITION === 'personal' ? '個人版' : '公開版'}</span></div><button class="btn small ${V.armed === 'logout' ? 'danger' : ''}" data-a="logout">${V.armed === 'logout' ? '確定登出' : '登出'}</button></div>` : ''}
       <div class="row"><div class="main"><span style="font-size:15px">資料備份</span><span class="st">${mode === 'saved' ? (store && store.kind === 'fb' ? '已存在雲端，換手機登入同一個帳號就看得到' : '已存在你的 claude.ai 帳號，換手機也看得到') : mode === 'local' ? '只存在這台裝置' : '範例模式不儲存'}</span></div><button class="btn small" data-a="export">匯出</button><button class="btn small" data-a="import">匯入</button></div>
+      <div class="row tap" data-a="go" data-v="manual" role="button" tabindex="0"><div class="main"><span style="font-size:15px">使用手冊</span><span class="st">各功能怎麼用、數字怎麼算</span></div><span class="small" style="font-size:18px">›</span></div>
     </div>
     ${mode === 'demo' ? `<button class="btn primary" data-a="startFresh">清除範例，開始記我的帳</button>` : ''}`;
+}
+
+/* ---------- 使用手冊 ---------- */
+const MANUAL = [
+  ['快速開始', [
+    ['建立帳戶', '到「帳戶與設定」輸入名稱按「新增帳戶」。每個帳戶分開計算，例如自己、家人、小孩各一個。點帳戶的「設為目前」，整個 App 就會切換成那個帳戶。'],
+    ['記第一筆', '按下方中間的「＋」。上排選類別（資金、股票交易、股利、外幣、借款），第二排選動作，填好按「完成」。'],
+    ['建議順序', '先記「資金 → 存入」放進證券戶的錢，再記買進。這樣「帳戶餘額」才會正確，不會變負數。']
+  ]],
+  ['總覽黑欄怎麼看', [
+    ['股票', '只算股票：總價值（市值）、總成本、未實現／已實現損益、本月與下月可領股息。外幣不算在這裡。'],
+    ['帳戶資金', '帳戶現值＝帳戶餘額＋股票與外幣市值。投資總額＝存入－出金（＋用定期定額或其他來源還的借款、外幣存入）。帳戶餘額＝存入－出金－買進花費＋賣出淨收入＋現金股利－利息＋借入－從帳戶扣的還款。'],
+    ['借款', '未還清的借款餘額、累積利息、扣除借款後淨值。每一筆借入是一張卡片，可左右滑。'],
+    ['外幣', '每個幣別的持有金額、今日匯率、台幣市值和匯差損益。'],
+    ['上方的台幣／日幣／美元', '把整個 App 的金額改用該幣別顯示，只是換算顯示，不會改到資料。']
+  ]],
+  ['記帳（＋）', [
+    ['資金：存入／出金', '錢轉進或轉出證券戶時記。存入會增加帳戶餘額和投資總額。'],
+    ['股票交易：買進／賣出', '輸入代號、張數或股數、成交價，手續費和證交稅會依帳戶的折扣自動算，也可以自己改成券商實際金額。同一天的當沖，App 會先算買進再算賣出。'],
+    ['股利', '選股票和除權息日期，App 會依當天前一天的庫存自動帶入股數、配發現金、匯費與二代健保。「利息」欄只在股利有被扣借款利息時才填。'],
+    ['外幣：買進／賣出', '用台幣換外幣（買進）或把外幣換回台幣（賣出），填成交匯率與手續費。'],
+    ['外幣：存入', '外幣從外面進帳（例如領日幣薪水）時用。不扣台幣餘額，依入帳匯率換算算進投資總額，之後賣出就能算出真正的匯差。'],
+    ['外幣：利息', '外幣定存利息，以零成本加進持有的外幣。'],
+    ['借款：借入／還本金／付利息', '借入會撥進帳戶餘額。還本金可以指定還哪一筆，並選這次用什麼還：股利（從帳戶餘額扣）、定期定額或其他（不扣帳戶餘額、算進投資總額）。'],
+    ['信貸「本加息」', '信用貸款還款可選「本加息（月繳）」，填這個月繳的總額，App 自動拆成本金和利息兩筆。同一個月的利息就不要再填到股利的「利息」欄，不然會重複扣。']
+  ]],
+  ['帳本', [
+    ['帳戶交易', '存入、出金、換匯、借款的紀錄。點一筆可修改，右邊可刪除。'],
+    ['庫存損益', '目前持有的每檔股票和外幣，上方可切換損益要不要扣除已領配息。點股票進個股頁，可看除權息、每筆交易，最下面有「刪除這檔」可一次刪除該檔所有紀錄（按兩次確認）。點外幣卡片進外幣明細頁，可修改或刪除每筆換匯。'],
+    ['實現損益', '已經賣出的股票損益。上方可切換是否把持有期間領到的股利算進去。'],
+    ['股票股利、借款', '配股紀錄、各筆借款與還款紀錄。']
+  ]],
+  ['股利自動入帳', [
+    ['自動入帳', '每個交易日 15:00 會自動抓股價與除權息公告。發放日到了，App 會依你當時的庫存自動記入股利。'],
+    ['待確認', '在設定把「股利入帳方式」改成「待確認」，公告後會先列在總覽的「待確認股利」，你確認或補填利息後再入帳。'],
+    ['會不會重複？', '如果同一次配息你已經手動記過（日期是除息日或發放日），App 不會再自動記；萬一出現重複，打開 App 時會自動清掉並提示。']
+  ]],
+  ['其他頁面', [
+    ['股息', '每月股息圖表與每檔股票的配息紀錄。'],
+    ['行事曆', '每個月的除息日與發放日。'],
+    ['財務自由計畫', '在總覽點「財務自由進度」，可試算每月投入多少、幾年後股息能達到目標。']
+  ]],
+  ['設定與備份', [
+    ['每月股息目標', '每個帳戶各自設定，用來算財務自由進度。'],
+    ['股利匯費、二代健保', '自動入帳時扣除的匯費；單筆股利滿 $20,000 扣 2.11% 補充保費。'],
+    ['隱藏金額', '在人多的地方打開 App 時，把金額改成＊＊＊＊。'],
+    ['資料備份', '登入後資料存在雲端，換手機登入同一帳號就看得到。建議定期按「匯出」留一份備份檔，大量修改或刪除前也先匯出一次。']
+  ]],
+  ['常見問題', [
+    ['帳戶餘額為什麼是負的？', '通常是有買進但沒記到對應的存入，或是用借來的錢買股票。補上「存入」或「借入」，餘額就會正確。'],
+    ['換了新版沒看到新功能？', '把 App 完全關掉再打開，就會載入最新版。'],
+    ['可以一次刪掉一檔股票嗎？', '可以，在「帳本 → 庫存損益」點那檔股票，拉到最下面按「刪除這檔」。']
+  ]]
+];
+function pageManual() {
+  return `<div class="top">${backBtn('返回')}<h1>使用手冊</h1></div>
+    <p class="small" style="margin:0 4px">點標題展開說明。</p>
+    ${MANUAL.map(([title, items], i) => `<details class="card" style="padding:0;overflow:hidden"${i === 0 ? ' open' : ''}><summary style="padding:14px 16px;font-weight:700;font-size:16px;cursor:pointer">${title}</summary>
+      <div style="display:flex;flex-direction:column;gap:12px;padding:0 16px 16px">${items.map(([h, p]) => `<div><b style="font-size:14px">${h}</b><p class="small" style="margin:4px 0 0;line-height:1.6">${p}</p></div>`).join('')}</div></details>`).join('')}`;
 }
 
 /* ---------- 財務自由計畫 ---------- */
