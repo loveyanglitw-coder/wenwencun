@@ -418,7 +418,7 @@ function compute(a, raw) { // raw：日股用日圓原值計算（只拿來顯�
     const p = t.code ? P(t.code) : null;
     if (t.type === 'in') { inSum += t.amount; if (!firstIn) firstIn = t.date; }
     else if (t.type === 'out') outSum += t.amount;
-    else if (t.type === 'loan') loanSum += t.amount;
+    else if (t.type === 'loan') { loanSum += t.amount; if (t.src === 'dca' || t.src === 'other') repayExt += t.amount; }
     else if (t.type === 'lborrow') borrowSum += t.amount;
     else if (t.type === 'lrepay') { repaySum += t.amount; if (t.src === 'dca' || t.src === 'other') repayExt += t.amount; }
     else if (t.type === 'buy') {
@@ -876,6 +876,25 @@ function targetCard(a, m) {
 }
 // 每月股息目標：每個帳戶各自設定；還沒設定過的帳戶沿用舊的共用目標
 const goalOf = a => a && a.goal != null ? a.goal : S.settings.goal;
+// 總覽黑欄「股票」：扣掉外幣（外幣另在「外幣」分頁看）
+function stockView(m) {
+  const F = m.holds.filter(h => isFX(h.code)), R = m.realList.filter(r => isFX(r.code));
+  const mv = m.mv - F.reduce((s, h) => s + h.mv, 0), cost = m.cost - F.reduce((s, h) => s + h.cost, 0), unreal = m.unreal - F.reduce((s, h) => s + h.pl, 0);
+  const real = m.real - R.reduce((s, r) => s + r.pl, 0), realCost = m.realCost - R.reduce((s, r) => s + r.cost, 0), todayPL = m.todayPL - F.reduce((s, h) => s + (h.today || 0), 0);
+  return { mv, cost, unreal, unrealRet: cost ? unreal / cost : 0, real, realRet: realCost ? real / realCost : 0, todayPL };
+}
+// 總覽黑欄「外幣」：各幣別持有、匯率、台幣現值與匯差損益
+function heroFx(a, m) {
+  const F = m.holds.filter(h => isFX(h.code));
+  if (!F.length) return `    <div><div class="lbl">外幣台幣現值</div><div class="big">${money(0)}</div><div class="lbl" style="font-size:12px">這個帳戶還沒有外幣。按下方「＋」→「外幣」記一筆換匯。</div></div>`;
+  const mv = F.reduce((s, h) => s + h.mv, 0), cost = F.reduce((s, h) => s + h.cost, 0), pl = F.reduce((s, h) => s + h.pl, 0), today = F.reduce((s, h) => s + (h.today || 0), 0);
+  return `    <div><div class="lbl">外幣台幣現值</div><div class="big">${money(mv)}</div><div class="lbl" style="font-size:12px">${esc((MARKET && MARKET.fx && MARKET.fx.src) || '今日匯率')}${today ? `・今日 <span class="${today > 0 ? 'upc' : 'downc'} num">${arrow(today)}${money(today, { plus: true })}</span>` : ''}</div></div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${F.map(h => `<div class="hrow"><span>${esc(FX_CURS[h.code][0])} <span class="num">${fxAmt(h.code, h.shares)}</span><span style="font-size:11px;opacity:.7">　匯率 ${fxRateTxt(h.code, h.price)}</span></span><span style="text-align:right"><span class="num">${money(h.mv)}</span><br><span class="num ${h.pl > 0 ? 'upc' : h.pl < 0 ? 'downc' : ''}" style="font-size:12px">${arrow(h.pl)}${money(h.pl, { plus: true })}（${pct(h.ret)}）</span></span></div>`).join('')}
+      <div class="hrow"><span>換匯成本（台幣）</span><span class="num">${money(cost)}</span></div>
+      <div class="hrow"><span>匯差損益</span><span style="display:flex;gap:8px;align-items:center"><span class="pill ${cls(pl)}">${arrow(pl)}${pct(cost ? pl / cost : 0)}</span><span class="num ${pl > 0 ? 'upc' : pl < 0 ? 'downc' : ''}">${money(pl, { plus: true })}</span></span></div>
+    </div>`;
+}
 function heroLoan(a, m) {
   const L = loanStats(a), act = L.filter(x => x.bal > 0 || !x.borrowed);
   if (!L.length) return `<div><div class="lbl">借款</div><div class="big" style="font-size:26px">還沒有借款紀錄</div><div class="lbl" style="font-size:12px;margin-top:4px">質押、信貸借來的錢買股，記在這裡就能看到借款餘額、利息與自有資金報酬</div></div>
@@ -908,8 +927,8 @@ function pageHome(a, m) {
   </div>
   ${fxNote()}
   <section class="hero">
-    <div class="hseg" role="tablist">${[['stock', '股票'], ['acct', '帳戶資金']].concat(LOAN_ON ? [['loan', '借款']] : []).map(([k, n]) => `<button role="tab" aria-selected="${V.heroView === k}" class="${V.heroView === k ? 'on' : ''}" data-a="heroView" data-v="${k}">${n}</button>`).join('')}</div>
-${V.heroView === 'loan' && LOAN_ON ? heroLoan(a, m) : V.heroView === 'acct' ? `    <div><div class="lbl">帳戶現值（含帳戶餘額）</div><div class="big">${money(m.value)}</div><div class="lbl" style="font-size:12px">帳戶淨值 <span class="num">${money(m.netValue)}</span>・扣除預估賣出費用</div></div>
+    <div class="hseg" role="tablist">${[['stock', '股票'], ['fx', '外幣'], ['acct', '帳戶資金']].concat(LOAN_ON ? [['loan', '借款']] : []).map(([k, n]) => `<button role="tab" aria-selected="${V.heroView === k}" class="${V.heroView === k ? 'on' : ''}" data-a="heroView" data-v="${k}">${n}</button>`).join('')}</div>
+${V.heroView === 'loan' && LOAN_ON ? heroLoan(a, m) : V.heroView === 'fx' ? heroFx(a, m) : V.heroView === 'acct' ? `    <div><div class="lbl">帳戶現值（含帳戶餘額）</div><div class="big">${money(m.value)}</div><div class="lbl" style="font-size:12px">帳戶淨值 <span class="num">${money(m.netValue)}</span>・扣除預估賣出費用</div></div>
     <div style="display:flex;flex-direction:column;gap:8px">
       <div class="hrow"><span>投資總額（存入−出金${m.repayExt ? '＋定額還款' : ''}）</span><span class="num">${money(m.invest)}</span></div>
       <div class="hrow"><span>帳戶餘額${m.balance < 0 ? '<span style="font-size:11px;opacity:.7">（負數＝已動用質押借款）</span>' : ''}</span><span class="num ${m.balance < 0 ? 'downc' : ''}">${money(m.balance)}</span></div>
@@ -917,18 +936,18 @@ ${V.heroView === 'loan' && LOAN_ON ? heroLoan(a, m) : V.heroView === 'acct' ? ` 
     <div class="tiles">
       <button class="tile" data-a="tab" data-v="ledger"><span class="small">股票損益</span><span class="v num ${cls(m.stockPL)}" style="font-size:clamp(17px,5.2vw,21px);white-space:nowrap">${arrow(m.stockPL)}${money(m.stockPL, { plus: true })}</span><span class="small num">${pct(m.stockRet)}・年化 ${pct(m.stockAnn)}</span></button>
       <button class="tile" data-a="tab" data-v="ledger"><span class="small">總損益（含息）</span><span class="v num ${cls(m.total)}" style="font-size:clamp(17px,5.2vw,21px);white-space:nowrap">${arrow(m.total)}${money(m.total, { plus: true })}</span><span class="small num">${pct(m.totalRet)}・年化 ${pct(m.totalAnn)}</span></button>
-    </div>` : `    <div><div class="lbl">總價值（股票市值）</div><div class="big">${money(m.mv)}</div><div class="lbl" style="font-size:12px">${pdate ? '股價 ' + roc(pdate) : '尚未有股價'}${m.todayPL ? `・今日 <span class="${m.todayPL > 0 ? 'upc' : 'downc'} num">${arrow(m.todayPL)}${money(m.todayPL, { plus: true })}</span>` : ''}</div></div>
+    </div>` : ((ms) => `    <div><div class="lbl">總價值（股票市值）</div><div class="big">${money(ms.mv)}</div><div class="lbl" style="font-size:12px">${pdate ? '股價 ' + roc(pdate) : '尚未有股價'}${ms.todayPL ? `・今日 <span class="${ms.todayPL > 0 ? 'upc' : 'downc'} num">${arrow(ms.todayPL)}${money(ms.todayPL, { plus: true })}</span>` : ''}</div></div>
     <div style="display:flex;flex-direction:column;gap:8px">
-      <div class="hrow"><span>總成本</span><span class="num">${money(m.cost)}</span></div>
-      <div class="hrow"><span>未實現損益</span><span style="display:flex;gap:8px;align-items:center"><span class="pill ${cls(m.unreal)}">${arrow(m.unreal)}${pct(m.unrealRet)}</span><span class="num ${m.unreal > 0 ? 'upc' : m.unreal < 0 ? 'downc' : ''}">${money(m.unreal, { plus: true })}</span></span></div>
-      <div class="hrow"><span>已實現損益</span><span style="display:flex;gap:8px;align-items:center"><span class="pill ${cls(m.real)}">${arrow(m.real)}${pct(m.realRet)}</span><span class="num ${m.real > 0 ? 'upc' : m.real < 0 ? 'downc' : ''}">${money(m.real, { plus: true })}</span></span></div>
+      <div class="hrow"><span>總成本</span><span class="num">${money(ms.cost)}</span></div>
+      <div class="hrow"><span>未實現損益</span><span style="display:flex;gap:8px;align-items:center"><span class="pill ${cls(ms.unreal)}">${arrow(ms.unreal)}${pct(ms.unrealRet)}</span><span class="num ${ms.unreal > 0 ? 'upc' : ms.unreal < 0 ? 'downc' : ''}">${money(ms.unreal, { plus: true })}</span></span></div>
+      <div class="hrow"><span>已實現損益</span><span style="display:flex;gap:8px;align-items:center"><span class="pill ${cls(ms.real)}">${arrow(ms.real)}${pct(ms.realRet)}</span><span class="num ${ms.real > 0 ? 'upc' : ms.real < 0 ? 'downc' : ''}">${money(ms.real, { plus: true })}</span></span></div>
       <div class="hrow"><span>本月可領</span><span class="num goldc">${money(m.thisM)}</span></div>
       <div class="hrow"><span>下月可領</span><span class="num goldc">${money(m.nextM)}</span></div>
     </div>
     <div class="tiles">
       <button class="tile" data-a="tab" data-v="hist"><span class="small">累計股息（最後股利）</span><span class="v gold">${money(m.netDiv)}</span><span class="small num">原始 ${money(m.origSum)}</span><span class="small num">利息 ${money(m.loanSum)}</span></button>
       <button class="tile" data-a="tab" data-v="hist"><span class="small">領息次數</span><span class="v">${m.divCount} 次</span><span class="small">近 12 月股息 ${money(m.div12)}</span></button>
-    </div>`}
+    </div>`)(stockView(m))}
   </section>
   ${pendingCard(a, true)}
   ${requestCard()}
@@ -1386,6 +1405,7 @@ function openEdit(id) {
     if (t.type === 'cash') { sh.f.per = t.perShare != null ? String(t.perShare) : ''; sh.f.perStock = ''; sh.cashTouched = true; sh.f.cash = String(origOf(t)); sh.otherTouched = true; sh.f.other = String(t.other || 0); sh.f.interest = t.interest ? String(t.interest) : ''; if (isJP(t.code)) { sh.wtaxTouched = true; sh.f.wtax = String(t.wtax || 0); if (t.fx) sh.f.fx = String(t.fx); } }
     else { delete sh.f.held; sh.f.per = ''; sh.f.perStock = t.perShare != null ? String(t.perShare) : ''; sh.sshTouched = true; sh.f.stockSh = String(t.shares); sh.cashTouched = true; sh.f.cash = ''; }
   } else if (t.type.startsWith('fx')) { sh.cur = t.cur; sh.f.fqty = String(t.qty); if (t.rate) sh.f.fxrate = String(t.rate); if (t.fee) sh.f.fee = String(t.fee); }
+  else if (t.loan && LOAN_ON && t.pair) { const both = a.txns.filter(x => x.pair === t.pair), r = both.find(x => x.type === 'lrepay'), i = both.find(x => x.type === 'loan'); sh.type = 'lrepay'; sh.lmode = 'pi'; sh.pairOf = t.pair; sh.editId = t.pair; sh.loanId = t.loan; sh.trId = (r && r.tr) || null; sh.lsrc = t.src || null; sh.f.lamt = String((r ? r.amount : 0) + (i ? i.amount : 0)); sh.f.lpint = String(i ? i.amount : 0); }
   else if (t.loan && LOAN_ON) { sh.type = t.type === 'loan' ? 'lint' : t.type; sh.loanId = t.loan; sh.trId = t.tr || null; sh.lsrc = t.src || null; sh.f.lamt = String(t.amount); }
   else sh.f.amount = String(t.amount);
   V.sheet = sh; render();
@@ -1460,7 +1480,7 @@ function renderSheetInner(only) {
         ${field('x-held', `除權息前庫存（股）<span data-live="tag-held" style="color:var(--accent);font-size:11px">${f.held != null && f.held !== '' ? '' : '　自動帶入'}</span>`, inp('x-held', 'held', f.held ?? d.curHeld, 'class="num" type="text" inputmode="numeric"'))}
         ${field('x-per', d.jp ? '每股現金股利（日圓）' : '每股現金股利（元）', inp('x-per', 'per', f.per, 'class="num" type="text" step="0.0001" inputmode="decimal" placeholder="0"'))}
         ${field('x-pst', '每股股票股利（元）', inp('x-pst', 'perStock', f.perStock, 'class="num" type="text" step="0.0001" inputmode="decimal" placeholder="0"'))}
-        ${d.jp ? field('x-fx', '入帳匯率（1 日圓＝台幣）', inp('x-fx', 'fx', f.fx ?? jpyRate(), 'class="num" type="text" inputmode="decimal"')) : field('x-int', '利息（手動填入）', inp('x-int', 'interest', f.interest, 'class="num" type="text" inputmode="numeric" placeholder="0"'))}
+        ${d.jp ? field('x-fx', '入帳匯率（1 日圓＝台幣）', inp('x-fx', 'fx', f.fx ?? jpyRate(), 'class="num" type="text" inputmode="decimal"')) : field('x-int', '利息（手動填入）' + (() => { const ym = (sh.date || todayISO()).slice(0, 7), li = a.txns.filter(x => x.type === 'loan' && x.date.slice(0, 7) === ym && x.id !== sh.editId).reduce((s2, x) => s2 + x.amount, 0); return li ? `<span style="color:#c0392b;font-size:11px">　本月借款頁已記利息 $${grp(li)}，不用再填</span>` : ''; })(), inp('x-int', 'interest', f.interest, 'class="num" type="text" inputmode="numeric" placeholder="0"'))}
         ${field('x-cash', '配發現金' + autoTag(sh.cashTouched, 'cash'), inp('x-cash', 'cash', d.cash || '', 'class="bignum" type="text" inputmode="numeric" placeholder="0"'), 'focus')}
         ${field('x-ssh', '配發股數' + autoTag(sh.sshTouched, 'ssh'), inp('x-ssh', 'stockSh', d.stockSh || '', 'class="bignum" type="text" inputmode="numeric" placeholder="0"'))}
         ${field('x-other', (d.jp ? '其他費用（券商手續費等，日圓）' : '其他費用（匯費、補充保費）') + autoTag(sh.otherTouched, 'other'), inp('x-other', 'other', d.other || '', 'class="num" type="text" inputmode="numeric" placeholder="0"'))}
@@ -1489,18 +1509,25 @@ function renderSheetInner(only) {
     const trs = cur ? cur.tranches.filter(x => !x.paidOff || x.id === sh.trId) : [];
     if (t === 'lrepay' && trs.length && !trs.some(x => x.id === sh.trId)) sh.trId = trs[0].id;
     const tc = t === 'lrepay' ? trs.find(x => x.id === sh.trId) : null;
-    const suggest = !cur ? 0 : t === 'lint' ? cur.monthInt : t === 'lrepay' ? (tc ? (tc.kind === 'credit' && tc.pmt ? Math.max(0, Math.min(tc.bal, tc.pmt - tc.monthInt)) : tc.bal) : cur.bal) : 0;
+    const isCredit = t === 'lrepay' && (tc ? tc.kind : cur && cur.kind) === 'credit', pi = isCredit && (sh.lmode || 'pi') === 'pi';
+    const piInt = !cur ? 0 : tc ? tc.monthInt : cur.monthInt;
+    const suggest = !cur ? 0 : t === 'lint' ? cur.monthInt : pi ? (tc ? (tc.pmt ? Math.min(tc.bal + tc.monthInt, tc.pmt) : tc.bal + tc.monthInt) : cur.pmt || cur.bal + cur.monthInt) : t === 'lrepay' ? (tc ? (tc.kind === 'credit' && tc.pmt ? Math.max(0, Math.min(tc.bal, tc.pmt - tc.monthInt)) : tc.bal) : cur.bal) : 0;
     const amt = f.lamt != null && f.lamt !== '' ? num(f.lamt) : suggest;
+    const pInt = pi ? (f.lpint != null && f.lpint !== '' ? num(f.lpint) : piInt) : 0, pPrin = pi ? Math.max(0, amt - pInt) : amt;
+    const ext = (sh.lsrc || 'dca') !== 'div';
     const chips = L.map(x => [x.id, esc(x.name)]).concat(t === 'lborrow' ? [['__new', '＋ 新增借款']] : []);
     body = `${chips.length ? `<div class="loan-chips">${chips.map(([id, n]) => `<button type="button" class="btn small ${(isNew ? '__new' : cur && cur.id) === id ? 'primary' : 'ghost'}" data-a="loanPick" data-v="${esc(id)}">${n}</button>`).join('')}</div>` : `<p class="small" style="margin:0">先新增一筆借款（例如元大證金股票質押、信用貸款），借到的錢會撥進帳戶餘額。</p>`}
       ${t === 'lborrow' ? `<div class="grid2">${field('x-lname', '借款名稱', inp('x-lname', 'lname', f.lname ?? (cur ? cur.name : ''), 'placeholder="例：元大證金 股票質押"'))}${field('x-lrate', '年利率 %', inp('x-lrate', 'lrate', f.lrate ?? (cur ? cur.rate : ''), 'class="num" type="text" inputmode="decimal" placeholder="3.92"'))}</div>
       ${segBar(Object.entries(LOAN_KIND), kind, 'lkind')}
       ${kind === 'credit' ? field('x-lyears', '貸款年數（算每月還款）', inp('x-lyears', 'lyears', f.lyears ?? (cur ? cur.years || '' : ''), 'class="num" type="text" inputmode="numeric" placeholder="7"')) : ''}` : ''}
       ${t === 'lrepay' && trs.length > 1 ? `<div class="loan-chips">${trs.map(x => `<button type="button" class="btn small ${x.id === sh.trId ? 'primary' : 'ghost'}" data-a="trPick" data-v="${esc(x.id)}">${roc(x.date)}・餘 ${money(x.bal, { show: true })}</button>`).join('')}</div>` : ''}
+      ${isCredit ? `${segBar([['pi', '本加息（月繳）'], ['p', '只還本金']], sh.lmode || 'pi', 'lmode')}` : ''}
       ${t === 'lrepay' ? `<p class="small" style="margin:0">這次用什麼還？</p>${segBar([['dca', '定期定額'], ['div', '股利'], ['other', '其他']], sh.lsrc || 'dca', 'lsrc')}` : ''}
-      <div class="grid2">${field('x-lamt', t === 'lborrow' ? '借入金額' : t === 'lrepay' ? '還本金金額' : '利息金額', inp('x-lamt', 'lamt', f.lamt ?? (suggest || ''), 'class="bignum" type="text" inputmode="numeric" placeholder="0"'), 'focus')}${dateF()}</div>
+      <div class="grid2">${field('x-lamt', t === 'lborrow' ? '借入金額' : pi ? '本月繳款（本金＋利息）' : t === 'lrepay' ? '還本金金額' : '利息金額', inp('x-lamt', 'lamt', f.lamt ?? (suggest || ''), 'class="bignum" type="text" inputmode="numeric" placeholder="0"'), 'focus')}${dateF()}</div>
+      ${pi ? `<div class="grid2">${field('x-lpint', '其中利息（自動計算，可改）', inp('x-lpint', 'lpint', f.lpint ?? (piInt || ''), 'class="num" type="text" inputmode="numeric" placeholder="0"'))}<div class="field"><span class="k">其中本金</span><b class="num" data-live="lpprin" style="font-size:20px;display:block;padding-top:8px">$${grp(pPrin)}</b></div></div>
+      <p class="small" style="margin:0">本加息會記成兩筆：還本金 ＋ 付利息（綁定這筆信貸）。<b>同一個月的利息就不要再填到股利的「利息」欄</b>，不然會重複扣。</p>` : ''}
       ${cur ? `<p class="small" style="margin:0">${esc(cur.name)}：餘額 ${money(cur.bal, { show: true })}・本月利息約 ${money(cur.monthInt, { show: true })}${cur.kind === 'credit' && cur.pmt ? `・每月還款約 ${money(cur.pmt, { show: true })}（本金 ${money(Math.max(0, cur.pmt - cur.monthInt), { show: true })}＋利息 ${money(cur.monthInt, { show: true })}）` : ''}</p>` : ''}
-      <div class="card pad" data-live="lnet" style="background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="k">${t === 'lborrow' ? '撥入帳戶餘額' : t === 'lrepay' ? ((sh.lsrc || 'dca') === 'div' ? '從帳戶餘額扣除・借款餘額減少' : '不扣帳戶餘額・算進投資總額') : '從帳戶餘額扣除・計入利息成本'}</span><b class="num ${t === 'lborrow' ? 'goldc' : ''}" style="font-size:20px">${t === 'lborrow' ? '+' : t === 'lrepay' && (sh.lsrc || 'dca') !== 'div' ? '' : '−'}$${grp(amt)}</b></div>
+      <div class="card pad" data-live="lnet" style="background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="k">${t === 'lborrow' ? '撥入帳戶餘額' : pi ? (ext ? `不扣帳戶餘額・算進投資總額<br><span class="small">借款餘額 −$${grp(pPrin)}・利息成本 +$${grp(pInt)}</span>` : `從帳戶餘額扣除<br><span class="small">借款餘額 −$${grp(pPrin)}・利息成本 +$${grp(pInt)}</span>`) : t === 'lrepay' ? (ext ? '不扣帳戶餘額・算進投資總額' : '從帳戶餘額扣除・借款餘額減少') : '從帳戶餘額扣除・計入利息成本'}</span><b class="num ${t === 'lborrow' ? 'goldc' : ''}" style="font-size:20px">${t === 'lborrow' ? '+' : t === 'lrepay' && ext ? '' : '−'}$${grp(amt)}</b></div>
       ${memoF()}`;
   } else if (t.startsWith('fx')) {
     const cur = sh.cur || 'USD', q = num(f.fqty), r = f.fxrate != null && f.fxrate !== '' ? num(f.fxrate) : fxRate(cur), fee = num(f.fee);
@@ -1592,6 +1619,16 @@ function saveSheet() {
       if (x && amount > x.bal) return toast(`這一筆只剩 ${money(x.bal, { show: true })} 沒還`);
       if (x && (sh.date || todayISO()) < x.date) return toast(`還款日不能早於這筆的借入日 ${roc(x.date)}`);
     }
+    const piMode = t === 'lrepay' && L.kind === 'credit' && (sh.lmode || 'pi') === 'pi';
+    if (piMode) {
+      const tr0 = loanTranches(a0, sh.editId).find(y => y.id === sh.trId) || loanStats(a0).find(y => y.id === L.id);
+      const pint = Math.round(f.lpint != null && f.lpint !== '' ? num(f.lpint) : (tr0 ? tr0.monthInt : 0)), prin = amount - pint;
+      if (pint < 0 || prin < 0) return toast('利息不能大於繳款金額');
+      if (tr0 && prin > tr0.bal) return toast(`本金部分 ${money(prin, { show: true })} 超過這筆剩下的 ${money(tr0.bal, { show: true })}`);
+      const pid = sh.editId || uid(), src = sh.lsrc || 'dca';
+      if (prin > 0) txs.push(Object.assign({ id: pid, type: 'lrepay', loan: L.id, amount: prin, src, pair: pid }, base, sh.trId ? { tr: sh.trId } : {}));
+      if (pint > 0) txs.push(Object.assign({ id: uid(), type: 'loan', loan: L.id, amount: pint, src, pair: pid }, base, { memo: base.memo || L.name + ' 本加息利息' }));
+    } else
     txs.push(Object.assign({ id: uid(), type: t === 'lint' ? 'loan' : t, loan: L.id, amount }, base, t === 'lrepay' && sh.trId ? { tr: sh.trId } : {}, t === 'lrepay' ? { src: sh.lsrc || 'dca' } : {}, t === 'lint' && !base.memo ? { memo: L.name + ' 利息' } : {}));
   } else if (t.startsWith('fx')) {
     const cur = sh.cur || 'USD', qty = num(f.fqty);
@@ -1621,8 +1658,8 @@ function saveSheet() {
   txs.forEach(x => { for (const k in x) if (x[k] === undefined) delete x[k]; });
   if (sh.editId) {
     const src = S.accounts.find(x => x.id === sh.editAcc);
-    if (src) src.txns = src.txns.filter(x => x.id !== sh.editId);
-    txs[0].id = sh.editId;
+    if (src) src.txns = src.txns.filter(x => x.id !== sh.editId && !(sh.pairOf && x.pair === sh.pairOf));
+    if (!txs[0].pair) txs[0].id = sh.editId;
     if (sh.keepEv && t === 'div') txs.forEach(x => { if (!x.ev) x.ev = sh.keepEv; });
     a.txns.push(...txs);
     V.sheet = null; persist(); render(); toast('已修改這筆紀錄'); return;
@@ -1692,7 +1729,7 @@ document.addEventListener('click', e => {
       if (mode === 'demo') { toast('範例資料不能刪除，開始記帳後才能編輯'); break; }
       if (v.startsWith('acc:')) { const id = v.slice(4); const nm = (S.accounts.find(x => x.id === id) || {}).name; S.accounts = S.accounts.filter(x => x.id !== id); if (S.cur === id) S.cur = S.accounts[0].id; V.openAcc = null; toast('已刪除帳戶「' + nm + '」'); }
       else if (v.startsWith('ev:')) { const id = v.slice(3); const st = S.stocks[V.code]; if (st) st.events = st.events.filter(x => x.id !== id); toast('已刪除公告'); }
-      else { const a0 = acc(); a0.txns = a0.txns.filter(t => t.id !== v); toast('已刪除'); }
+      else { const a0 = acc(), o = a0.txns.find(t => t.id === v), pr = o && o.pair; a0.txns = a0.txns.filter(t => t.id !== v && !(pr && t.pair === pr)); toast(pr ? '已刪除（本金＋利息兩筆）' : '已刪除'); }
       persist(); break;
     }
     case 'addEvent': {
@@ -1766,6 +1803,7 @@ document.addEventListener('click', e => {
     case 'loanPick': V.sheet.loanId = v; V.sheet.trId = null; ['lname', 'lrate', 'lyears', 'lamt'].forEach(k => delete V.sheet.f[k]); V.sheet.lkind = null; break;
     case 'lkind': V.sheet.lkind = v; break;
     case 'lsrc': V.sheet.lsrc = v; break;
+    case 'lmode': V.sheet.lmode = v; delete V.sheet.f.lamt; delete V.sheet.f.lpint; break;
     case 'save': saveSheet(); return;
     case 'planM': V.plan.m = +v; break;
     case 'planRe': V.plan.re = !V.plan.re; break;
@@ -1787,7 +1825,7 @@ document.addEventListener('input', e => {
     else if (k === 'rate') { sh.rate = num(el.value); sh.feeTouched = false; refreshSheetTotals(); return; }
     else if (k === 'date') { sh.date = el.value; if (sh.type === 'div') refreshSheetTotals(); }
     else { sh.f[k] = el.value; if (k === 'fee') sh.feeTouched = true; if (k === 'tax') sh.taxTouched = true; if (k === 'cash') sh.cashTouched = el.value !== ''; if (k === 'stockSh') sh.sshTouched = el.value !== ''; if (k === 'other') sh.otherTouched = el.value !== ''; if (k === 'wtax') sh.wtaxTouched = el.value !== ''; }
-    if (['qty', 'price', 'fee', 'tax', 'per', 'perStock', 'held', 'shares', 'cash', 'stockSh', 'other', 'interest', 'wtax', 'fx', 'fqty', 'fxrate', 'lamt'].includes(k)) { refreshSheetTotals(el); }
+    if (['qty', 'price', 'fee', 'tax', 'per', 'perStock', 'held', 'shares', 'cash', 'stockSh', 'other', 'interest', 'wtax', 'fx', 'fqty', 'fxrate', 'lamt', 'lpint'].includes(k)) { refreshSheetTotals(el); }
   }
 });
 document.addEventListener('change', e => {
