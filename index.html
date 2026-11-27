@@ -344,8 +344,8 @@ function fxTx(t) {
   if (t.type === 'fxint') return Object.assign({}, t, { code: t.cur, shares: t.qty });
   return t;
 }
-// ---- 借款（個人版）：帳戶 loans:[{id,name,kind:'pledge'|'credit',rate,years,start}]；交易 lborrow 借入／lrepay 還本金；付利息記成 type 'loan' 並帶 loan id ----
-const LOAN_ON = window.APP_EDITION === 'personal';
+// ---- 借款：帳戶 loans:[{id,name,kind:'pledge'|'credit',rate,years,start}]；交易 lborrow 借入／lrepay 還本金；付利息記成 type 'loan' 並帶 loan id ----
+const LOAN_ON = true; // 借款功能：個人版、公開版都開放
 const LOAN_KIND = { pledge: '股票質押', credit: '信用貸款', other: '其他借款' };
 // 每次借入＝一筆（tranche）；還款帶 tr 指定還哪一筆，沒指定的依先借先還分配；利息按日計息：餘額 × 年利率 × 天數 ÷ 365
 const loanDays = (d1, d2) => Math.max(0, Math.round((new Date(d2 + 'T00:00:00') - new Date(d1 + 'T00:00:00')) / 86400000));
