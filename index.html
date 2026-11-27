@@ -828,6 +828,7 @@ function render() {
   const a = acc(), m = compute(a);
   let html = '';
   if (V.page === 'stock') html = pageStock(a, m);
+  else if (V.page === 'fx') html = pageFx(a, m);
   else if (V.page === 'accounts') html = pageAccounts(a, m);
   else if (V.page === 'plan') html = pagePlan(a, m);
   else html = ({ home: pageHome, ledger: pageLedger, hist: pageHist, cal: pageCal })[V.tab](a, m);
@@ -989,7 +990,7 @@ function donut(m) {
 }
 function fxCard(h, m) {
   const c = h.code, rate = h.price, avg = h.shares ? h.cost / h.shares : 0;
-  return `<div class="hold-card fx-card ${h.pl > 0 ? 'up' : h.pl < 0 ? 'down' : ''}">
+  return `<button class="hold-card rowbtn fx-card ${h.pl > 0 ? 'up' : h.pl < 0 ? 'down' : ''}" data-a="fxpage" data-v="${c}">
       <span class="hold-head">
         <span class="hold-title"><span class="hold-code num">${c}</span><span class="hold-name" style="flex:0 1 auto">${esc(h.name)}</span><span class="tag fx-tag">外幣</span></span>
         <span class="hold-price"><span class="s">匯率</span><b class="num ${cls(h.chg)}">${fxRateTxt(c, rate)}</b><span class="num ${cls(h.chg)}">${h.chg ? arrow(h.chg) + (h.chg > 0 ? '+' : '−') + fxRateTxt(c, Math.abs(h.chg)) : '—'}</span></span>
@@ -998,7 +999,28 @@ function fxCard(h, m) {
         <span class="kv"><span class="k">持有（佔 ${grp(m.mv ? h.mv / m.mv * 100 : 0, 1)}%）</span><span class="num" style="font-weight:600">${fxAmt(c, h.shares)}</span><span class="s num">成本匯率 ${fxRateTxt(c, avg)}</span></span>
         <span class="kv" style="align-items:center;text-align:center"><span class="k">台幣現值</span><span class="num" style="font-weight:600">${money(h.mv)}</span><span class="s num">成本 ${money(h.cost)}</span></span>
         <span class="kv" style="align-items:flex-end;text-align:right"><span class="k">匯差損益</span><span class="num ${cls(h.pl)}" style="font-weight:700;font-size:16px">${money(h.pl, { plus: true })}</span><span class="s num">${pct(h.ret)}${h.fxInt ? '・含利息 ' + fxAmt(c, h.fxInt) : ''}</span></span>
-      </span></div>`;
+      </span></button>`;
+}
+// 外幣明細頁：從庫存損益點外幣卡片進來，可修改／刪除每筆換匯
+function pageFx(a, m) {
+  const c = V.code, nm = FX_CURS[c] ? FX_CURS[c][0] : c, h = m.holds.find(x => x.code === c);
+  const txs = sortTx(a.txns.filter(t => t.type.startsWith('fx') && t.cur === c)).reverse();
+  const tn = { fxbuy: '買進', fxsell: '賣出', fxint: '利息' };
+  const k = 'fxall:' + c, armed = V.armed === k;
+  return `<div class="top">${backBtn()}<div style="flex:1;min-width:0;display:flex;gap:8px;align-items:baseline"><b class="num" style="font-size:18px">${esc(c)}</b><span style="font-weight:700;font-size:16px">${esc(nm)}</span><span class="tag fx-tag">外幣</span></div></div>
+  <div class="card pad" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap"><span class="num" style="font-weight:700;font-size:34px;line-height:1">${fxRateTxt(c, fxRate(c))}</span><span class="small">今日匯率（1 ${esc(nm)}＝台幣）</span></div>
+    ${h ? `<div class="grid2">
+      <div class="kv"><span class="k">持有</span><b class="num">${fxAmt(c, h.shares)}</b><span class="s num">成本匯率 ${fxRateTxt(c, h.shares ? h.cost / h.shares : 0)}</span></div>
+      <div class="kv"><span class="k">台幣現值</span><b class="num">${money(h.mv)}</b><span class="s num">成本 ${money(h.cost)}</span></div>
+      <div class="kv"><span class="k">匯差損益</span><b class="num ${cls(h.pl)}">${money(h.pl, { plus: true })}</b><span class="s num">${pct(h.ret)}</span></div>
+      <div class="kv"><span class="k">累計利息</span><b class="num">${fxAmt(c, h.fxInt || 0)}</b></div>
+    </div>` : '<span class="small">目前沒有持有</span>'}
+  </div>
+  <div class="h2row"><h2>換匯紀錄</h2><span class="small">點一筆可修改</span></div>
+  <div class="list">${txs.length ? txs.map(t => `<div class="row tap" data-a="editTx" data-v="${t.id}" role="button" tabindex="0" aria-label="修改這筆"><div class="main"><span class="t">${tn[t.type]} ${fxAmt(c, t.qty)}${t.type !== 'fxint' && t.rate ? ' @ ' + fxRateTxt(c, t.rate) : ''}</span><span class="st num">${roc(t.date)}${t.fee ? '・手續費 ' + money(t.fee, { show: true }) : ''}${t.memo ? '・' + esc(t.memo) : ''}</span></div><b class="num">${t.type === 'fxbuy' ? '−' + money(t.qty * (t.rate || 0) + (t.fee || 0), { show: true }) : t.type === 'fxsell' ? '+' + money(t.qty * (t.rate || 0) - (t.fee || 0), { show: true }) : '+' + fxAmt(c, t.qty)}</b>${delBtn(t.id)}</div>`).join('') : '<div class="empty">沒有紀錄</div>'}</div>
+  <div style="display:flex;gap:10px"><button class="btn" style="flex:1" data-a="add" data-v="fxsell">賣出 ${esc(nm)}</button><button class="btn primary" style="flex:1" data-a="add" data-v="fxbuy">買進 ${esc(nm)}</button></div>
+  ${txs.length ? `<button class="btn ${armed ? 'danger' : 'ghost'}" style="width:100%;margin-top:4px" data-a="del" data-v="${esc(k)}">${armed ? `確定刪除${esc(nm)}的 ${txs.length} 筆紀錄` : `刪除${esc(nm)}全部紀錄`}</button>` : ''}`;
 }
 function holdList(holds, m) {
   if (!holds.length) return `<div class="list"><div class="empty">還沒有持股。按下方「＋」記第一筆買進。</div></div>`;
@@ -1384,6 +1406,7 @@ if (LOAN_ON) { GROUPS.lend = ['借款', ['lborrow', 'lrepay', 'lint']]; TYPES.pu
 const groupOf = t => Object.keys(GROUPS).find(g => GROUPS[g][1].includes(t)) || 'trade';
 function contextType() {
   if (V.page === 'stock') return 'buy';
+  if (V.page === 'fx') return 'fxbuy';
   if (V.page) return 'buy';
   if (V.tab === 'ledger') return ({ cash: 'in', hold: 'buy', real: 'sell', div: 'div', loan: (acc().loans || []).length ? 'lrepay' : 'lborrow' })[V.ledger] || 'buy';
   if (V.tab === 'hist' || V.tab === 'cal') return 'div';
@@ -1393,6 +1416,7 @@ function openSheet(type, code) {
   const a = acc(), m = compute(a);
   V.sheet = { type: type || contextType(), accId: a.id, code: code || (V.page === 'stock' && V.code) || '', date: todayISO(), unit: 'lot', feeTouched: false, taxTouched: false, rate: null, f: {}, filledFor: null, cashTouched: false, sshTouched: false, otherTouched: false };
   V.sheet.wasJP = isJP(V.sheet.code);
+  if (V.page === 'fx' && V.code && isFX(V.code)) V.sheet.cur = V.code;
   render();
 }
 function openEdit(id) {
@@ -1699,6 +1723,7 @@ document.addEventListener('click', e => {
     case 'go': V.prev = { tab: V.tab, page: V.page, code: V.code }; V.page = v; if (v === 'accounts') V.openAcc = V.openAcc || S.cur; scrollTo(0, 0); break;
     case 'back': if (V.prev && V.prev.page && V.prev.page !== V.page) { V.page = V.prev.page; V.code = V.prev.code; V.prev = null; } else V.page = null; scrollTo(0, 0); break;
     case 'stock': V.prev = { tab: V.tab, page: V.page, code: V.code }; V.page = 'stock'; V.code = v; scrollTo(0, 0); break;
+    case 'fxpage': V.prev = { tab: V.tab, page: V.page, code: V.code }; V.page = 'fx'; V.code = v; scrollTo(0, 0); break;
     case 'hide': S.settings.hide = !S.settings.hide; persist(); break;
     case 'cur': S.settings.currency = v; persist(); break;
     case 'metric': V.metric = v; break;
@@ -1729,6 +1754,7 @@ document.addEventListener('click', e => {
       V.armed = null;
       if (mode === 'demo') { toast('範例資料不能刪除，開始記帳後才能編輯'); break; }
       if (v.startsWith('acc:')) { const id = v.slice(4); const nm = (S.accounts.find(x => x.id === id) || {}).name; S.accounts = S.accounts.filter(x => x.id !== id); if (S.cur === id) S.cur = S.accounts[0].id; V.openAcc = null; toast('已刪除帳戶「' + nm + '」'); }
+      else if (v.startsWith('fxall:')) { const c = v.slice(6), a0 = acc(), n0 = a0.txns.length; a0.txns = a0.txns.filter(t => !(t.type.startsWith('fx') && t.cur === c)); toast(`已刪除${FX_CURS[c] ? FX_CURS[c][0] : c}的 ${n0 - a0.txns.length} 筆紀錄`); if (V.page === 'fx') { V.page = null; V.prev = null; } }
       else if (v.startsWith('stk:')) { const code = v.slice(4), a0 = acc(), n0 = a0.txns.length; a0.txns = a0.txns.filter(t => t.code !== code); toast(`已刪除 ${code} 的 ${n0 - a0.txns.length} 筆紀錄`); if (V.page === 'stock') { if (V.prev && V.prev.page && V.prev.page !== 'stock') { V.page = V.prev.page; V.code = V.prev.code; } else V.page = null; V.prev = null; } }
       else if (v.startsWith('ev:')) { const id = v.slice(3); const st = S.stocks[V.code]; if (st) st.events = st.events.filter(x => x.id !== id); toast('已刪除公告'); }
       else { const a0 = acc(), o = a0.txns.find(t => t.id === v), pr = o && o.pair; a0.txns = a0.txns.filter(t => t.id !== v && !(pr && t.pair === pr)); toast(pr ? '已刪除（本金＋利息兩筆）' : '已刪除'); }
