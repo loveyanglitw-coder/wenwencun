@@ -927,7 +927,7 @@ function pageHome(a, m) {
   </div>
   ${fxNote()}
   <section class="hero">
-    <div class="hseg" role="tablist">${[['stock', '股票'], ['fx', '外幣'], ['acct', '帳戶資金']].concat(LOAN_ON ? [['loan', '借款']] : []).map(([k, n]) => `<button role="tab" aria-selected="${V.heroView === k}" class="${V.heroView === k ? 'on' : ''}" data-a="heroView" data-v="${k}">${n}</button>`).join('')}</div>
+    <div class="hseg" role="tablist">${[['stock', '股票'], ['acct', '帳戶資金']].concat(LOAN_ON ? [['loan', '借款']] : [], [['fx', '外幣']]).map(([k, n]) => `<button role="tab" aria-selected="${V.heroView === k}" class="${V.heroView === k ? 'on' : ''}" data-a="heroView" data-v="${k}">${n}</button>`).join('')}</div>
 ${V.heroView === 'loan' && LOAN_ON ? heroLoan(a, m) : V.heroView === 'fx' ? heroFx(a, m) : V.heroView === 'acct' ? `    <div><div class="lbl">帳戶現值（含帳戶餘額）</div><div class="big">${money(m.value)}</div><div class="lbl" style="font-size:12px">帳戶淨值 <span class="num">${money(m.netValue)}</span>・扣除預估賣出費用</div></div>
     <div style="display:flex;flex-direction:column;gap:8px">
       <div class="hrow"><span>投資總額（存入−出金${m.repayExt ? '＋定額還款' : ''}）</span><span class="num">${money(m.invest)}</span></div>
